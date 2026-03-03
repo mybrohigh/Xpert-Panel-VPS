@@ -133,6 +133,7 @@ def get_public_ip():
     finally:
         requests.packages.urllib3.util.connection.HAS_IPV6 = True
 
+    sock = None
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.connect(('8.8.8.8', 80))
@@ -142,7 +143,8 @@ def get_public_ip():
     except (socket.error, IndexError):
         pass
     finally:
-        sock.close()
+        if sock is not None:
+            sock.close()
 
     return '127.0.0.1'
 

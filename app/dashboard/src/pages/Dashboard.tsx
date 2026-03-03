@@ -35,7 +35,7 @@ export const Dashboard: FC = () => {
     return () => clearTimeout(timer);
   }, []);
   return (
-    <VStack className="xpert-page-shift" justifyContent="space-between" minH="100vh" p="6" rowGap={4}>
+    <VStack className="xpert-page-shift" justifyContent="space-between" minH="100vh" p="6" rowGap={4} w="full" minW={0}>
       <Box w="full">
         <Header />
         <Statistics mt="4" />

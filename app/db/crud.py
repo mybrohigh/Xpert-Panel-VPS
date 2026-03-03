@@ -791,7 +791,11 @@ def autodelete_expired_users(db: Session,
 
 
 def get_all_users_usages(
-        db: Session, admin: Admin, start: datetime, end: datetime
+        db: Session,
+        admin: Optional[List[str]],
+        start: datetime,
+        end: datetime,
+        unassigned_only: bool = False,
 ) -> List[UserUsageResponse]:
     """
     Retrieves usage data for all users associated with an admin within a specified time range.
@@ -822,7 +826,14 @@ def get_all_users_usages(
             used_traffic=0
         )
 
-    admin_users = set(user.id for user in get_users(db=db, admins=admin))
+    admin_users = set(
+        user.id
+        for user in get_users(
+            db=db,
+            admins=admin,
+            unassigned_only=unassigned_only,
+        )
+    )
 
     cond = and_(
         NodeUserUsage.created_at >= start,

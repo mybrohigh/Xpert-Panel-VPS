@@ -14,6 +14,10 @@ from app.utils.system import cpu_usage, memory_usage, realtime_bandwidth
 router = APIRouter(tags=["System"], prefix="/api", responses={401: responses._401})
 
 
+def _xray_unavailable() -> bool:
+    return xray.config is None
+
+
 @router.get("/system", response_model=SystemStats)
 def get_system_stats(
     db: Session = Depends(get_db), admin: Admin = Depends(Admin.get_current)
@@ -66,6 +70,9 @@ def get_system_stats(
 @router.get("/inbounds", response_model=Dict[ProxyTypes, List[ProxyInbound]])
 def get_inbounds(admin: Admin = Depends(Admin.get_current)):
     """Retrieve inbound configurations grouped by protocol."""
+    if _xray_unavailable():
+        # Keep dashboard usable in subscription-aggregation-only mode.
+        return {}
     return xray.config.inbounds_by_protocol
 
 
@@ -76,6 +83,8 @@ def get_hosts(
     db: Session = Depends(get_db), admin: Admin = Depends(Admin.check_sudo_admin)
 ):
     """Get a list of proxy hosts grouped by inbound tag."""
+    if _xray_unavailable():
+        return {}
     hosts = {tag: crud.get_hosts(db, tag) for tag in xray.config.inbounds_by_tag}
     return hosts
 
@@ -89,6 +98,12 @@ def modify_hosts(
     admin: Admin = Depends(Admin.check_sudo_admin),
 ):
     """Modify proxy hosts and update the configuration."""
+    if _xray_unavailable():
+        raise HTTPException(
+            status_code=503,
+            detail="Xray core is not installed on this server",
+        )
+
     for inbound_tag in modified_hosts:
         if inbound_tag not in xray.config.inbounds_by_tag:
             raise HTTPException(

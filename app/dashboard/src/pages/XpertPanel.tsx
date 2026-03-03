@@ -44,6 +44,7 @@ import { Header } from "components/Header";
 import { Footer } from "components/Footer";
 import { WhitelistManager } from "components/WhitelistManager";
 import { DirectConfigManager } from "components/DirectConfigManager";
+import { PanelSyncManager } from "components/PanelSyncManager";
 import { FC, useEffect, useState } from "react";
 import { TrashIcon, ArrowPathIcon, PlusIcon } from "@heroicons/react/24/outline";
 import { fetch } from "../service/http";
@@ -82,6 +83,7 @@ interface Config {
   ping_ms: number;
   packet_loss: number;
   is_active: boolean;
+  is_permanent: boolean;
 }
 
 interface SourceCreate {
@@ -309,6 +311,26 @@ export const XpertPanel: FC = () => {
     }
   };
 
+  const handleToggleConfigPermanent = async (id: number, isPermanent: boolean) => {
+    try {
+      await fetch(`/api/xpert/configs/${id}/permanent`, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${getAuthToken()}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ is_permanent: isPermanent }),
+      });
+      await loadData();
+    } catch (error) {
+      toast({
+        title: "Error updating permanent status",
+        status: "error",
+        duration: 3000,
+      });
+    }
+  };
+
   const handleSyncMarzban = async () => {
     setUpdating(true);
     try {
@@ -433,11 +455,14 @@ export const XpertPanel: FC = () => {
           </Card>
         )}
 
-        {/* Whitelists */}
-        <WhitelistManager />
+        {/* External panel cloning */}
+        <PanelSyncManager />
 
         {/* Direct Configurations */}
         <DirectConfigManager />
+
+        {/* Whitelists */}
+        <WhitelistManager />
 
         {/* Sources */}
         <Card mt="4">
@@ -569,13 +594,13 @@ export const XpertPanel: FC = () => {
         {/* Configs */}
         <Card mt="4">
           <CardHeader>
-            <Heading size="md">Active Configurations ({configs.filter(c => c.is_active).length})</Heading>
+            <Heading size="md">Active Configurations ({configs.filter(c => c.is_active || c.is_permanent).length})</Heading>
           </CardHeader>
           <CardBody>
             {isMobile ? (
               <VStack align="stretch" spacing={3}>
                 {configs
-                  .filter((c) => c.is_active)
+                  .filter((c) => c.is_active || c.is_permanent)
                   .slice(0, 20)
                   .map((config) => (
                     <Box
@@ -600,11 +625,23 @@ export const XpertPanel: FC = () => {
                         <Text fontSize="sm" color="gray.600">
                           {config.packet_loss.toFixed(0)}%
                         </Text>
-                        <Badge colorScheme="green">Active</Badge>
+                        <Badge colorScheme={config.is_permanent ? "purple" : "green"}>
+                          {config.is_permanent ? "Permanent" : "Active"}
+                        </Badge>
+                      </HStack>
+                      <HStack mt={2} justify="space-between">
+                        <Text fontSize="xs" color="gray.500">
+                          Permanent
+                        </Text>
+                        <Switch
+                          size="sm"
+                          isChecked={config.is_permanent}
+                          onChange={() => handleToggleConfigPermanent(config.id, !config.is_permanent)}
+                        />
                       </HStack>
                     </Box>
                   ))}
-                {configs.filter((c) => c.is_active).length === 0 && (
+                {configs.filter((c) => c.is_active || c.is_permanent).length === 0 && (
                   <Text textAlign="center" color="gray.500" py={4}>
                     No active configurations
                   </Text>
@@ -621,12 +658,13 @@ export const XpertPanel: FC = () => {
                       <Th>Protocol</Th>
                       <Th>Ping</Th>
                       <Th>Loss</Th>
+                      <Th>Permanent</Th>
                       <Th>Status</Th>
                     </Tr>
                   </Thead>
                   <Tbody>
                     {configs
-                      .filter((c) => c.is_active)
+                      .filter((c) => c.is_active || c.is_permanent)
                       .slice(0, 20)
                       .map((config) => (
                         <Tr key={config.id}>
@@ -637,8 +675,15 @@ export const XpertPanel: FC = () => {
                           <Td>{config.ping_ms.toFixed(0)} ms</Td>
                           <Td>{config.packet_loss.toFixed(0)}%</Td>
                           <Td>
-                            <Text color="green.500" fontWeight="bold">
-                              Active
+                            <Switch
+                              size="sm"
+                              isChecked={config.is_permanent}
+                              onChange={() => handleToggleConfigPermanent(config.id, !config.is_permanent)}
+                            />
+                          </Td>
+                          <Td>
+                            <Text color={config.is_permanent ? "purple.500" : "green.500"} fontWeight="bold">
+                              {config.is_permanent ? "Permanent" : "Active"}
                             </Text>
                           </Td>
                         </Tr>
@@ -647,9 +692,9 @@ export const XpertPanel: FC = () => {
                 </Table>
               </Box>
             )}
-            {configs.filter((c) => c.is_active).length > 20 && (
+            {configs.filter((c) => c.is_active || c.is_permanent).length > 20 && (
               <Text mt={2} fontSize="sm" color="gray.500">
-                Showing 20 of {configs.filter((c) => c.is_active).length} active configs
+                Showing 20 of {configs.filter((c) => c.is_active || c.is_permanent).length} active configs
               </Text>
             )}
           </CardBody>

@@ -129,6 +129,7 @@ class XpertService:
         total_configs = 0
         active_configs = 0
         config_id = 1
+        existing_configs = {c.raw: c for c in storage.get_configs()}
         
         for source in sources:
             try:
@@ -143,6 +144,11 @@ class XpertService:
                 for raw in raw_configs:
                     result = checker.process_config(raw)
                     if result:
+                        previous = existing_configs.get(result["raw"])
+                        is_active = previous.is_active if previous else result["is_active"]
+                        is_permanent = previous.is_permanent if previous else False
+                        if is_permanent:
+                            is_active = True
                         config_obj = AggregatedConfig(
                             id=config_id,
                             raw=result["raw"],
@@ -154,13 +160,14 @@ class XpertService:
                             ping_ms=result["ping_ms"],
                             jitter_ms=result["jitter_ms"],
                             packet_loss=result["packet_loss"],
-                            is_active=result["is_active"],
+                            is_active=is_active,
+                            is_permanent=is_permanent,
                             last_check=datetime.utcnow().isoformat()
                         )
                         all_configs.append(config_obj)
                         config_id += 1
                         total_configs += 1
-                        if result["is_active"]:
+                        if is_active:
                             active_configs += 1
                             source_active += 1
                 
@@ -213,9 +220,9 @@ class XpertService:
         """Получение статистики"""
         stats = storage.get_stats()
         direct_configs = direct_config_service.get_all_configs()
-        direct_active = [c for c in direct_configs if c.is_active]
+        direct_active = direct_config_service.get_active_configs()
 
-        # Include direct configs in global totals shown by Xpert Panel Statistics.
+        # Include direct configs in global totals shown by Xpert Statistics.
         stats["total_direct_configs"] = len(direct_configs)
         stats["active_direct_configs"] = len(direct_active)
         stats["total_configs"] = stats.get("total_configs", 0) + len(direct_configs)

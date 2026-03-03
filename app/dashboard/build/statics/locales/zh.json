@@ -319,5 +319,10 @@
   "adminManager.lifetime.countBadge": "x{{count}}",
   "onlineNow": "在线",
   "todayUsage": "今日",
-  "cpuUsage": "CPU"
+  "cpuUsage": "CPU",
+  "adminManager.action.userDisabled": "禁用用户",
+  "adminManager.meta.userStatusChanged": "状态: {{from}} -> {{to}}",
+  "adminManager.meta.userDisabled": "用户已禁用: {{from}} -> {{to}}",
+  "adminManager.notifications.statusChanged": "状态: {{from}} -> {{to}}",
+  "adminManager.meta.userResetUsageValue": "流量重置: {{from}} -> {{to}}"
 }

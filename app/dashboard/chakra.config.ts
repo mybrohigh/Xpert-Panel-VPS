@@ -121,16 +121,58 @@ export const theme = extendTheme({
         boxShadow:
           "inset 1px 1px 0 rgba(255,255,255,0.14), inset -1px -1px 0 rgba(148,163,184,0.12)",
       },
+      ".chakra-ui-dark .chakra-toast .chakra-alert::before, .chakra-ui-dark .chakra-toast .chakra-alert::after": {
+        opacity: 0,
+      },
+      ".chakra-ui-dark .chakra-toast .chakra-alert": {
+        border: "1px solid rgba(148, 163, 184, 0.4) !important",
+        boxShadow:
+          "inset 0 1px 0 rgba(255,255,255,0.1), 0 14px 34px rgba(0,0,0,0.36)",
+        backdropFilter: "blur(14px)",
+        WebkitBackdropFilter: "blur(14px)",
+      },
+      ".chakra-ui-dark .chakra-toast .chakra-alert[data-status='success']": {
+        bg: "rgba(16, 185, 129, 0.18)",
+        borderColor: "rgba(16, 185, 129, 0.55) !important",
+        color: "#d1fae5",
+      },
+      ".chakra-ui-dark .chakra-toast .chakra-alert[data-status='error']": {
+        bg: "rgba(244, 63, 94, 0.2)",
+        borderColor: "rgba(251, 113, 133, 0.55) !important",
+        color: "#ffe4e6",
+      },
+      ".chakra-ui-dark .chakra-toast .chakra-alert[data-status='warning']": {
+        bg: "rgba(245, 158, 11, 0.22)",
+        borderColor: "rgba(251, 191, 36, 0.55) !important",
+        color: "#ffedd5",
+      },
+      ".chakra-ui-dark .chakra-toast .chakra-alert[data-status='info'], .chakra-ui-dark .chakra-toast .chakra-alert[data-status='loading']": {
+        bg: "rgba(59, 130, 246, 0.22)",
+        borderColor: "rgba(96, 165, 250, 0.55) !important",
+        color: "#dbeafe",
+      },
+      ".chakra-ui-dark .chakra-toast .chakra-alert .chakra-alert__icon, .chakra-ui-dark .chakra-toast .chakra-alert .chakra-alert__title, .chakra-ui-dark .chakra-toast .chakra-alert .chakra-alert__desc": {
+        color: "inherit",
+      },
+      ".chakra-ui-dark .chakra-toast .chakra-alert .chakra-close-button": {
+        color: "inherit",
+        opacity: 0.9,
+      },
+      ".chakra-ui-dark .chakra-toast .chakra-alert .chakra-close-button:hover": {
+        bg: "rgba(15, 23, 42, 0.35)",
+        opacity: 1,
+      },
       ".xpert-page-shift": {
-        transition: "transform .25s ease",
+        transition: "padding .25s ease",
       },
       "@media (min-width: 48em)": {
         ".xpert-side-open main": {
-          paddingRight: "300px",
+          paddingRight:
+            "calc(var(--xpert-side-menu-width, 240px) + var(--xpert-side-menu-right, 10px) + var(--xpert-side-menu-content-gap, 16px))",
           transition: "padding-right .25s ease",
         },
         ".xpert-side-open .xpert-page-shift": {
-          transform: "translateX(-8px)",
+          transform: "none",
         },
       },
     },
@@ -178,8 +220,9 @@ export const theme = extendTheme({
         container: {
           borderRadius: "6px",
           fontSize: "sm",
+          bg: "var(--chakra-alert-bg)",
+          color: "var(--chakra-alert-fg)",
           _dark: {
-            bg: "rgba(17, 24, 39, 0.5)",
             border: "1px solid rgba(191, 219, 254, 0.28)",
             backdropFilter: "blur(14px)",
             WebkitBackdropFilter: "blur(14px)",

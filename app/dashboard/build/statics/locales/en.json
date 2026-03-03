@@ -326,5 +326,10 @@
   "adminManager.lifetime.countBadge": "x{{count}}",
   "onlineNow": "Online",
   "todayUsage": "Today",
-  "cpuUsage": "CPU"
+  "cpuUsage": "CPU",
+  "adminManager.action.userDisabled": "Disabled user",
+  "adminManager.meta.userStatusChanged": "Status: {{from}} -> {{to}}",
+  "adminManager.meta.userDisabled": "User disabled: {{from}} -> {{to}}",
+  "adminManager.notifications.statusChanged": "Status: {{from}} -> {{to}}",
+  "adminManager.meta.userResetUsageValue": "Usage reset: {{from}} -> {{to}}"
 }

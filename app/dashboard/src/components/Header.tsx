@@ -144,6 +144,11 @@ const NotificationCircle = chakra(Box, {
 });
 
 const NOTIFICATION_KEY = "xpert-menu-notification";
+const SIDE_MENU_WIDTH = "240px";
+const SIDE_MENU_TOP = "82px";
+const SIDE_MENU_RIGHT = "10px";
+const SIDE_MENU_BUTTON_HEIGHT = "46px";
+const SIDE_MENU_CONTENT_GAP = "16px";
 
 export const shouldShowDonation = (): boolean => {
   const date = localStorage.getItem(NOTIFICATION_KEY);
@@ -199,10 +204,21 @@ export const Header: FC<HeaderProps> = ({ actions }) => {
     const desktop = window.matchMedia("(min-width: 48em)").matches;
     if (desktop && isMenuOpen) {
       body.classList.add("xpert-side-open");
+      body.style.setProperty("--xpert-side-menu-width", SIDE_MENU_WIDTH);
+      body.style.setProperty("--xpert-side-menu-right", SIDE_MENU_RIGHT);
+      body.style.setProperty("--xpert-side-menu-content-gap", SIDE_MENU_CONTENT_GAP);
     } else {
       body.classList.remove("xpert-side-open");
+      body.style.removeProperty("--xpert-side-menu-width");
+      body.style.removeProperty("--xpert-side-menu-right");
+      body.style.removeProperty("--xpert-side-menu-content-gap");
     }
-    return () => body.classList.remove("xpert-side-open");
+    return () => {
+      body.classList.remove("xpert-side-open");
+      body.style.removeProperty("--xpert-side-menu-width");
+      body.style.removeProperty("--xpert-side-menu-right");
+      body.style.removeProperty("--xpert-side-menu-content-gap");
+    };
   }, [isMenuOpen]);
 
   useEffect(() => {
@@ -232,18 +248,26 @@ export const Header: FC<HeaderProps> = ({ actions }) => {
     >
       <HStack>
         <Link to="/">
-          <Text as="h1" fontWeight="semibold" fontSize="2xl" cursor="pointer" _hover={{ color: "primary.500" }}>
-            {t("users")}
+          <Text
+            as="h1"
+            fontWeight="semibold"
+            fontSize={{ base: "xl", md: "2xl" }}
+            cursor="pointer"
+            _hover={{ color: "primary.500" }}
+          >
+            Xpert
           </Text>
         </Link>
         {isSudo() && (
           <>
-            <Text fontSize="2xl" color="gray.400">|</Text>
+            <Text fontSize={{ base: "xl", md: "2xl" }} color="gray.400">
+              |
+            </Text>
             <Link to="/xpert/">
               <Text
                 as="h1"
                 fontWeight="semibold"
-                fontSize="2xl"
+                fontSize={{ base: "xl", md: "2xl" }}
                 cursor="pointer"
                 _hover={{ color: "primary.500" }}
               >
@@ -261,7 +285,7 @@ export const Header: FC<HeaderProps> = ({ actions }) => {
         right={{ base: "auto", md: "24px" }}
         zIndex={{ base: "auto", md: 1300 }}
         opacity={{ base: 1, md: isControlsVisible ? 1 : 0 }}
-        transform={{ base: "none", md: isControlsVisible ? "translateY(0)" : "translateY(-12px)" }}
+        transform={{ base: "none", md: isControlsVisible ? "none" : "translateY(-12px)" }}
         pointerEvents={{ base: "auto", md: isControlsVisible ? "auto" : "none" }}
         transition="opacity .2s ease, transform .2s ease"
       >
@@ -335,13 +359,16 @@ export const Header: FC<HeaderProps> = ({ actions }) => {
           <Box
             display={{ base: "none", md: isMenuOpen ? "flex" : "none" }}
             position="fixed"
-            top="88px"
-            right="0"
-            h="calc(100vh - 88px)"
-            w="320px"
+            top={SIDE_MENU_TOP}
+            right={SIDE_MENU_RIGHT}
+            h="auto"
+            maxH={`calc(100vh - ${SIDE_MENU_TOP})`}
+            w={SIDE_MENU_WIDTH}
             zIndex={1200}
             flexDirection="column"
             p={0}
+            overflowY="auto"
+            overflowX="hidden"
             _dark={{
               bg: "transparent",
               backdropFilter: "blur(16px)",
@@ -357,39 +384,39 @@ export const Header: FC<HeaderProps> = ({ actions }) => {
             >
               {isSudo() && (
                 <>
-                  <Button size="sm" h="50px" w="full" px={4} textAlign="left" justifyContent="flex-start" leftIcon={<HostsIcon />} onClick={() => { onEditingHosts(true); closeSideMenu(); }}>
+                  <Button size="sm" h={SIDE_MENU_BUTTON_HEIGHT} w="full" px={4} textAlign="left" justifyContent="flex-start" leftIcon={<HostsIcon />} onClick={() => { onEditingHosts(true); closeSideMenu(); }}>
                     {t("header.hostSettings")}
                   </Button>
-                  <Button size="sm" h="50px" w="full" px={4} textAlign="left" justifyContent="flex-start" leftIcon={<NodesIcon />} onClick={() => { onEditingNodes(true); closeSideMenu(); }}>
+                  <Button size="sm" h={SIDE_MENU_BUTTON_HEIGHT} w="full" px={4} textAlign="left" justifyContent="flex-start" leftIcon={<NodesIcon />} onClick={() => { onEditingNodes(true); closeSideMenu(); }}>
                     {t("header.nodeSettings")}
                   </Button>
-                  <Button size="sm" h="50px" w="full" px={4} textAlign="left" justifyContent="flex-start" leftIcon={<NodesUsageIcon />} onClick={() => { onShowingNodesUsage(true); closeSideMenu(); }}>
+                  <Button size="sm" h={SIDE_MENU_BUTTON_HEIGHT} w="full" px={4} textAlign="left" justifyContent="flex-start" leftIcon={<NodesUsageIcon />} onClick={() => { onShowingNodesUsage(true); closeSideMenu(); }}>
                     {t("header.nodesUsage")}
                   </Button>
-                  <Button size="sm" h="50px" w="full" px={4} textAlign="left" justifyContent="flex-start" leftIcon={<ResetUsageIcon />} onClick={() => { onResetAllUsage(true); closeSideMenu(); }}>
+                  <Button size="sm" h={SIDE_MENU_BUTTON_HEIGHT} w="full" px={4} textAlign="left" justifyContent="flex-start" leftIcon={<ResetUsageIcon />} onClick={() => { onResetAllUsage(true); closeSideMenu(); }}>
                     {t("resetAllUsage")}
                   </Button>
-                  <Button size="sm" h="50px" w="full" px={4} textAlign="left" justifyContent="flex-start" leftIcon={<AdminLimitsIcon />} onClick={() => { onEditingAdminLimits(true); closeSideMenu(); }}>
+                  <Button size="sm" h={SIDE_MENU_BUTTON_HEIGHT} w="full" px={4} textAlign="left" justifyContent="flex-start" leftIcon={<AdminLimitsIcon />} onClick={() => { onEditingAdminLimits(true); closeSideMenu(); }}>
                     {t("adminLimits.menu")}
                   </Button>
                   <Link to="/admin-manager/" onClick={closeSideMenu} style={{ display: "block", width: "100%" }}>
-                    <Button size="sm" h="50px" px={4} w="full" textAlign="left" justifyContent="flex-start" leftIcon={<AdminManagerIcon />}>
+                    <Button size="sm" h={SIDE_MENU_BUTTON_HEIGHT} px={4} w="full" textAlign="left" justifyContent="flex-start" leftIcon={<AdminManagerIcon />}>
                       {t("adminManager.menu")}
                     </Button>
                   </Link>
                 </>
               )}
-              <Button size="sm" h="50px" w="full" px={4} textAlign="left" justifyContent="flex-start" leftIcon={<CryptoLinkIcon />} onClick={() => { onEditingCrypto(true); closeSideMenu(); }}>
+              <Button size="sm" h={SIDE_MENU_BUTTON_HEIGHT} w="full" px={4} textAlign="left" justifyContent="flex-start" leftIcon={<CryptoLinkIcon />} onClick={() => { onEditingCrypto(true); closeSideMenu(); }}>
                 {t("cryptoLink.menu")}
               </Button>
               <Link to={DONATION_URL} target="_blank" onClick={() => { handleOnClose(); closeSideMenu(); }} style={{ display: "block", width: "100%" }}>
-                <Button size="sm" h="50px" px={4} w="full" textAlign="left" justifyContent="flex-start" leftIcon={<DonationIcon />} position="relative">
+                <Button size="sm" h={SIDE_MENU_BUTTON_HEIGHT} px={4} w="full" textAlign="left" justifyContent="flex-start" leftIcon={<DonationIcon />} position="relative">
                   {t("header.donation")}
                   {showDonationNotif && <NotificationCircle top="2" right="2" />}
                 </Button>
               </Link>
               <Link to="/login" onClick={closeSideMenu} style={{ display: "block", width: "100%" }}>
-                <Button size="sm" h="50px" px={4} w="full" textAlign="left" justifyContent="flex-start" leftIcon={<LogoutIcon />}>
+                <Button size="sm" h={SIDE_MENU_BUTTON_HEIGHT} px={4} w="full" textAlign="left" justifyContent="flex-start" leftIcon={<LogoutIcon />}>
                   {t("header.logout")}
                 </Button>
               </Link>
@@ -440,7 +467,7 @@ export const Header: FC<HeaderProps> = ({ actions }) => {
               data-color-scheme={`no-preference: ${gBtnColor}; light: ${gBtnColor}; dark: ${gBtnColor};`}
               data-size="large"
               data-show-count="true"
-              aria-label="Star Xpert Panel on GitHub"
+              aria-label="Star Xpert on GitHub"
             >
               Star
             </GitHubButton>

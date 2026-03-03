@@ -12,7 +12,7 @@ DATA_DIR = os.environ.get("XPERT_DATA_DIR", "/var/lib/marzban/xpert")
 
 
 class XpertStorage:
-    """Файловое хранилище для Xpert Panel"""
+    """Файловое хранилище для Xpert"""
     
     def __init__(self):
         self.data_dir = DATA_DIR
@@ -118,8 +118,35 @@ class XpertStorage:
     def get_active_configs(self) -> List[AggregatedConfig]:
         """Получение активных конфигов"""
         configs = self.get_configs()
-        active = [c for c in configs if c.is_active]
+        active = [c for c in configs if (c.is_active or c.is_permanent)]
         return sorted(active, key=lambda c: c.ping_ms)
+
+    def get_config_by_id(self, config_id: int) -> Optional[AggregatedConfig]:
+        configs = self.get_configs()
+        return next((c for c in configs if c.id == config_id), None)
+
+    def update_config_status(
+        self,
+        config_id: int,
+        is_active: Optional[bool] = None,
+        is_permanent: Optional[bool] = None,
+    ) -> Optional[AggregatedConfig]:
+        configs = self.get_configs()
+        updated = None
+        for cfg in configs:
+            if cfg.id != config_id:
+                continue
+            if is_active is not None:
+                cfg.is_active = is_active
+            if is_permanent is not None:
+                cfg.is_permanent = is_permanent
+                if is_permanent:
+                    cfg.is_active = True
+            updated = cfg
+            break
+        if updated:
+            self._save_json(self.configs_file, [c.to_dict() for c in configs])
+        return updated
     
     def save_configs(self, configs: List[AggregatedConfig]):
         """Сохранение всех конфигов"""
@@ -133,7 +160,7 @@ class XpertStorage:
         """Получение статистики"""
         sources = self.get_sources()
         configs = self.get_configs()
-        active_configs = [c for c in configs if c.is_active]
+        active_configs = [c for c in configs if (c.is_active or c.is_permanent)]
         
         return {
             "total_sources": len(sources),

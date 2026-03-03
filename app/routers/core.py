@@ -17,6 +17,10 @@ from config import XRAY_JSON
 router = APIRouter(tags=["Core"], prefix="/api", responses={401: responses._401})
 
 
+def _xray_unavailable() -> bool:
+    return xray.core is None or xray.config is None
+
+
 @router.websocket("/core/logs")
 async def core_logs(websocket: WebSocket, db: Session = Depends(get_db)):
     token = websocket.query_params.get("token") or websocket.headers.get(
@@ -28,6 +32,9 @@ async def core_logs(websocket: WebSocket, db: Session = Depends(get_db)):
 
     if not admin.is_sudo:
         return await websocket.close(reason="You're not allowed", code=4403)
+
+    if _xray_unavailable():
+        return await websocket.close(reason="Xray core is not installed", code=4403)
 
     interval = websocket.query_params.get("interval")
     if interval:
@@ -78,6 +85,13 @@ async def core_logs(websocket: WebSocket, db: Session = Depends(get_db)):
 @router.get("/core", response_model=CoreStats)
 def get_core_stats(admin: Admin = Depends(Admin.get_current)):
     """Retrieve core statistics such as version and uptime."""
+    if _xray_unavailable():
+        return CoreStats(
+            version="xray-not-installed",
+            started=False,
+            logs_websocket=router.url_path_for("core_logs"),
+        )
+
     return CoreStats(
         version=xray.core.version,
         started=xray.core.started,
@@ -88,6 +102,12 @@ def get_core_stats(admin: Admin = Depends(Admin.get_current)):
 @router.post("/core/restart", responses={403: responses._403})
 def restart_core(admin: Admin = Depends(Admin.check_sudo_admin)):
     """Restart the core and all connected nodes."""
+    if _xray_unavailable():
+        raise HTTPException(
+            status_code=503,
+            detail="Xray core is not installed on this server",
+        )
+
     startup_config = xray.config.include_db_users()
     xray.core.restart(startup_config)
 
@@ -112,6 +132,12 @@ def modify_core_config(
     payload: dict, admin: Admin = Depends(Admin.check_sudo_admin)
 ) -> dict:
     """Modify the core configuration and restart the core."""
+    if _xray_unavailable():
+        raise HTTPException(
+            status_code=503,
+            detail="Xray core is not installed on this server",
+        )
+
     try:
         config = XRayConfig(payload, api_port=xray.config.api_port)
     except ValueError as err:

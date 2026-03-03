@@ -132,9 +132,9 @@ NOTIFY_DAYS_LEFT = config(
 DISABLE_RECORDING_NODE_USAGE = config("DISABLE_RECORDING_NODE_USAGE", cast=bool, default=False)
 
 # headers: profile-update-interval, support-url, profile-title
-SUB_UPDATE_INTERVAL = config("SUB_UPDATE_INTERVAL", default="2")
+SUB_UPDATE_INTERVAL = config("SUB_UPDATE_INTERVAL", default="12")
 SUB_SUPPORT_URL = config("SUB_SUPPORT_URL", default="https://t.me/")
-SUB_PROFILE_TITLE = config("SUB_PROFILE_TITLE", default="Xpert")
+SUB_PROFILE_TITLE = config("SUB_PROFILE_TITLE", default="Subscription")
 
 # discord webhook log
 DISCORD_WEBHOOK_URL = config("DISCORD_WEBHOOK_URL", default="")
@@ -161,10 +161,6 @@ XPERT_MIN_USERS_FOR_STATS = config("XPERT_MIN_USERS_FOR_STATS", cast=int, defaul
 XPERT_TOP_SERVERS_LIMIT = config("XPERT_TOP_SERVERS_LIMIT", cast=int, default=1000)  # Убираем лимит
 XPERT_USE_COUNTRY_FLAGS = config("XPERT_USE_COUNTRY_FLAGS", cast=bool, default=True)
 JOB_SUBSCRIPTION_AGGREGATION_INTERVAL = config("JOB_SUBSCRIPTION_AGGREGATION_INTERVAL", cast=int, default=3600)
-
-# ============================================
-# XPERT PANEL - Traffic Monitoring System
-# ============================================
 XPERT_TRAFFIC_TRACKING_ENABLED = config("XPERT_TRAFFIC_TRACKING_ENABLED", cast=bool, default=True)
 XPERT_TRAFFIC_DB_PATH = config("XPERT_TRAFFIC_DB_PATH", default="data/traffic_stats.db")
 XPERT_TRAFFIC_RETENTION_DAYS = config("XPERT_TRAFFIC_RETENTION_DAYS", cast=int, default=0)

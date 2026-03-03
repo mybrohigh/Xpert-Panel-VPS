@@ -196,6 +196,7 @@ class DirectConfigService:
                 jitter_ms=result["jitter_ms"],
                 packet_loss=result["packet_loss"],
                 is_active=result["is_active"],
+                is_permanent=False,
                 bypass_whitelist=True,  # Всегда обходить белый список
                 auto_sync_to_marzban=True,  # Автоматически синхронизировать
                 added_at=datetime.utcnow().isoformat(),
@@ -223,7 +224,7 @@ class DirectConfigService:
     def get_active_configs(self) -> List[DirectConfig]:
         """Получение активных прямых конфигураций"""
         with self._lock:
-            return [config for config in self.configs if config.is_active]
+            return [config for config in self.configs if (config.is_active or config.is_permanent)]
     
     def get_config_by_id(self, config_id: int) -> Optional[DirectConfig]:
         """Получение конфигурации по ID"""
@@ -236,8 +237,22 @@ class DirectConfigService:
             config = next((c for c in self.configs if c.id == config_id), None)
             if config:
                 config.is_active = not config.is_active
+                if not config.is_active and config.is_permanent:
+                    config.is_permanent = False
                 self._save_configs()
                 logger.info(f"Toggled direct config {config_id}: {config.is_active}")
+            return config
+
+    def set_permanent(self, config_id: int, is_permanent: bool) -> Optional[DirectConfig]:
+        """Установка/снятие признака постоянной конфигурации"""
+        with self._lock:
+            config = next((c for c in self.configs if c.id == config_id), None)
+            if config:
+                config.is_permanent = bool(is_permanent)
+                if config.is_permanent:
+                    config.is_active = True
+                self._save_configs()
+                logger.info(f"Set permanent direct config {config_id}: {config.is_permanent}")
             return config
     
     def delete_config(self, config_id: int) -> bool:
@@ -275,6 +290,8 @@ class DirectConfigService:
                 config.jitter_ms = result["jitter_ms"]
                 config.packet_loss = result["packet_loss"]
                 config.is_active = result["is_active"]
+                if config.is_permanent:
+                    config.is_active = True
                 if remarks is None:
                     config.remarks = result["remarks"]
 
@@ -402,8 +419,8 @@ class DirectConfigService:
 
             # Ensure all inactive configs (including ping=999) are grouped at the bottom.
             # This guarantees "disabled configs go to the end" even if they were disabled earlier.
-            active_list = [c for c in self.configs if bool(c.is_active)]
-            inactive_list = [c for c in self.configs if not bool(c.is_active)]
+            active_list = [c for c in self.configs if bool(c.is_active or c.is_permanent)]
+            inactive_list = [c for c in self.configs if not bool(c.is_active or c.is_permanent)]
             new_list = active_list + inactive_list
             if [c.id for c in new_list] != [c.id for c in self.configs]:
                 self.configs = new_list
@@ -416,13 +433,13 @@ class DirectConfigService:
     def get_configs_for_subscription(self) -> List[DirectConfig]:
         """Получение конфигураций для подписки (только активные)"""
         with self._lock:
-            return [config for config in self.configs if config.is_active]
+            return [config for config in self.configs if (config.is_active or config.is_permanent)]
     
     def get_stats(self) -> Dict:
         """Получение статистики прямых конфигураций"""
         with self._lock:
             total = len(self.configs)
-            active = len([c for c in self.configs if c.is_active])
+            active = len([c for c in self.configs if (c.is_active or c.is_permanent)])
 
             # Статистика по протоколам
             protocols: Dict[str, int] = {}

@@ -892,10 +892,17 @@ export const UserDialog: FC<UserDialogProps> = () => {
                         variant="outline"
                         onClick={async () => {
                           try {
+                            const username =
+                              (editingUser?.username ||
+                                form.getValues("username") ||
+                                "").trim();
+                            if (!username) throw new Error("username is required");
                             await fetch("/xpert/v2box-hwid/reset", {
                               method: "POST",
-                              body: { username: form.getValues("username") },
+                              body: { username },
                             });
+                            form.setValue("v2box_hwid", "");
+                            refetchUsers();
                             toast({
                               title: t("userDialog.v2boxHwidResetDone"),
                               status: "success",

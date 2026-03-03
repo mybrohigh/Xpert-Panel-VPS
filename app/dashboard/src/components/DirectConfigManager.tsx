@@ -67,6 +67,7 @@ interface DirectConfig {
   jitter_ms: number;
   packet_loss: number;
   is_active: boolean;
+  is_permanent: boolean;
   bypass_whitelist: boolean;
   auto_sync_to_marzban: boolean;
   added_at: string;
@@ -556,6 +557,26 @@ export const DirectConfigManager: FC = () => {
     }
   };
 
+  const handleTogglePermanent = async (id: number, isPermanent: boolean) => {
+    try {
+      await fetch(`/api/xpert/direct-configs/${id}/permanent`, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${getAuthToken()}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ is_permanent: isPermanent }),
+      });
+      await loadConfigs();
+    } catch (error) {
+      toast({
+        title: "Error updating permanent status",
+        status: "error",
+        duration: 3000,
+      });
+    }
+  };
+
   const handleSyncToMarzban = async (id: number) => {
     try {
       await fetch(`/api/xpert/direct-configs/${id}/sync-to-marzban`, {
@@ -846,7 +867,7 @@ export const DirectConfigManager: FC = () => {
           spacing={3}
         >
           <Heading size="md">
-            Direct Configurations ({configs.filter((c) => c.is_active).length} active)
+            Direct Configurations ({configs.filter((c) => c.is_active || c.is_permanent).length} active)
             <Badge ml={2} colorScheme="green">
               Bypass Whitelist
             </Badge>
@@ -949,6 +970,17 @@ export const DirectConfigManager: FC = () => {
                       onChange={() => handleToggleConfig(config.id)}
                       size="sm"
                     />
+                    <HStack spacing={1}>
+                      <Text fontSize="xs" color="gray.500">
+                        P
+                      </Text>
+                      <Switch
+                        isChecked={config.is_permanent}
+                        onChange={() => handleTogglePermanent(config.id, !config.is_permanent)}
+                        size="sm"
+                        colorScheme="purple"
+                      />
+                    </HStack>
                   </HStack>
                   <HStack>
                     <IconButton
@@ -984,6 +1016,9 @@ export const DirectConfigManager: FC = () => {
                 </Text>
                 <HStack mt={2} justify="space-between">
                   <Text fontSize="sm">{config.ping_ms.toFixed(0)} ms</Text>
+                  <Badge colorScheme={config.is_permanent ? "purple" : "green"}>
+                    {config.is_permanent ? "Permanent" : "Active"}
+                  </Badge>
                   <Text fontSize="sm" color="gray.500">
                     {new Date(config.added_at).toLocaleDateString()}
                   </Text>
@@ -1046,6 +1081,7 @@ export const DirectConfigManager: FC = () => {
                     />
                   </Th>
                   <Th>Status</Th>
+                  <Th>Permanent</Th>
                   <Th>Remarks</Th>
                   <Th>Server</Th>
                   <Th>Port</Th>
@@ -1104,6 +1140,14 @@ export const DirectConfigManager: FC = () => {
                         isChecked={config.is_active}
                         onChange={() => handleToggleConfig(config.id)}
                         size="sm"
+                      />
+                    </Td>
+                    <Td>
+                      <Switch
+                        isChecked={config.is_permanent}
+                        onChange={() => handleTogglePermanent(config.id, !config.is_permanent)}
+                        size="sm"
+                        colorScheme="purple"
                       />
                     </Td>
                     <Td fontSize="sm" maxW="200px" isTruncated>

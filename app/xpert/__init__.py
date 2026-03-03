@@ -1,1 +1,1 @@
-# Xpert Panel - Subscription Aggregation Module
+# Xpert - Subscription Aggregation Module

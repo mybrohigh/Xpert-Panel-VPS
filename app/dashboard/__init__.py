@@ -5,11 +5,14 @@ from pathlib import Path
 
 from app import app
 from config import DEBUG, VITE_BASE_API, DASHBOARD_PATH
+from fastapi import HTTPException
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 base_dir = Path(__file__).parent
 build_dir = base_dir / 'build'
 statics_dir = build_dir / 'statics'
+assets_dir = build_dir / 'assets'
 
 
 def build():
@@ -56,6 +59,18 @@ def run_build():
         StaticFiles(directory=statics_dir, html=True),
         name="statics"
     )
+    app.mount(
+        '/assets/',
+        StaticFiles(directory=assets_dir, html=True),
+        name="assets"
+    )
+
+    @app.api_route("/site.webmanifest", methods=["GET", "HEAD"], include_in_schema=False)
+    def site_webmanifest_alias():
+        manifest_path = statics_dir / "favicon" / "site.webmanifest"
+        if manifest_path.is_file():
+            return FileResponse(manifest_path, media_type="application/manifest+json")
+        raise HTTPException(status_code=404, detail="Manifest not found")
 
 
 @app.on_event("startup")

@@ -51,10 +51,16 @@ export const router = createHashRouter([
         loader: fetchSudoLoader,
     },
     {
+        path: "/\u0447\u0437\u0443\u043A\u0435/",
+        element: <XpertPanel />,
+        errorElement: <Login />,
+        loader: fetchSudoLoader,
+    },
+    {
         path: "/admin-manager/",
         element: <AdminManager />,
         errorElement: <Login />,
-        loader: fetchSudoLoader,
+        loader: fetchAdminLoader,
     },
     {
         path: "/login/",

@@ -76,6 +76,7 @@ class AggregatedConfig:
     jitter_ms: float = 0.0
     packet_loss: float = 0.0
     is_active: bool = False
+    is_permanent: bool = False
     last_check: str = field(default_factory=lambda: datetime.utcnow().isoformat())
     
     def to_dict(self):
@@ -99,6 +100,7 @@ class DirectConfig:
     jitter_ms: float = 0.0
     packet_loss: float = 0.0
     is_active: bool = True
+    is_permanent: bool = False
     bypass_whitelist: bool = True  # Всегда обходить белый список
     auto_sync_to_marzban: bool = True  # Автоматически синхронизировать с Marzban
     added_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())

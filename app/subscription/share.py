@@ -485,6 +485,24 @@ def generate_subscription(
         except Exception as e:
             logger.error(f"Failed to append Xpert mix subscription: {e}")
 
+
+        # Append per-user remote panel links from local sync cache.
+        # This keeps subscription generation fast and avoids remote API calls per request.
+        try:
+            from app.xpert.panel_sync_service import panel_sync_service
+
+            username = str(kwargs["extra_data"].get("username") or "").strip()
+            if username:
+                remote_links = panel_sync_service.get_cached_user_links(username)
+                if remote_links:
+                    existing = {line.strip() for line in config.splitlines() if line.strip()}
+                    extra_lines = [link for link in remote_links if link not in existing]
+                    if extra_lines:
+                        suffix = "\n".join(extra_lines)
+                        config = (config.rstrip("\n") + "\n" + suffix.lstrip("\n")).rstrip("\n") + "\n"
+        except Exception as e:
+            logger.error(f"Failed to append remote panel links: {e}")
+
     if as_base64:
         config = base64.b64encode(config.encode()).decode()
 
