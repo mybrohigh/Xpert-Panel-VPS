@@ -11,6 +11,7 @@ from app.xpert.service import xpert_service
 from app.xpert.marzban_integration import marzban_integration
 from app.xpert.ping_stats import ping_stats_service
 from app.xpert.direct_config_service import direct_config_service
+from app.xpert.panel_sync_service import panel_sync_service
 from app.xpert.checker import checker
 from app.xpert.hwid_lock_service import (
     set_required_hwid_for_subscription_url,
@@ -143,6 +144,18 @@ class DirectConfigReorder(BaseModel):
 
 class TargetIPsUpdate(BaseModel):
     target_ips: List[str]
+
+
+class PanelSyncTargetInput(BaseModel):
+    id: Optional[int] = None
+    url: str = ""
+    username: str = ""
+    password: str = ""
+    enabled: bool = False
+
+
+class PanelSyncTargetsUpdate(BaseModel):
+    targets: Optional[List[PanelSyncTargetInput]] = None
 
 
 class CryptoLinkRequest(BaseModel):
@@ -431,6 +444,60 @@ async def update_target_ips(data: TargetIPsUpdate, admin: Admin = Depends(Admin.
     try:
         updated = xpert_service.set_target_ips(data.target_ips)
         return {"message": "Target IPs updated", "target_ips": updated}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/panel-sync/targets")
+async def get_panel_sync_targets(admin: Admin = Depends(Admin.check_sudo_admin)):
+    """Получение настроек панелей для клонирования пользователей."""
+    return {"targets": panel_sync_service.get_targets()}
+
+
+@router.put("/panel-sync/targets")
+async def save_panel_sync_targets(
+    payload: PanelSyncTargetsUpdate,
+    admin: Admin = Depends(Admin.check_sudo_admin),
+):
+    """Сохранение настроек панелей для клонирования пользователей."""
+    targets = panel_sync_service.save_targets(
+        [target.model_dump() for target in (payload.targets or [])]
+    )
+    return {"targets": targets}
+
+
+@router.post("/panel-sync/test")
+async def test_panel_sync_targets(admin: Admin = Depends(Admin.check_sudo_admin)):
+    """Проверка соединения с целевыми панелями."""
+    return {"targets": panel_sync_service.test_targets()}
+
+
+@router.post("/panel-sync/sync-all-users")
+async def sync_all_users_to_targets(
+    db: Session = Depends(get_db),
+    admin: Admin = Depends(Admin.check_sudo_admin),
+):
+    """Ручная синхронизация всех пользователей в целевые панели."""
+    summary = panel_sync_service.sync_all_users_from_db(db)
+    return {
+        "total_users": summary.get("total_users", 0),
+        "created": summary.get("created", 0),
+        "updated": summary.get("updated", 0),
+        "errors": summary.get("errors", 0),
+        "sample_results": (summary.get("results") or [])[:20],
+        "orphan_cleanup": summary.get("orphan_cleanup"),
+    }
+
+
+@router.post("/panel-sync/targets/{target_id}/purge-users")
+async def purge_panel_sync_target_users(
+    target_id: int,
+    admin: Admin = Depends(Admin.check_sudo_admin),
+):
+    """Удаляет клонов пользователей с выбранной панели и очищает mapping."""
+    try:
+        result = panel_sync_service.purge_target_users(target_id)
+        return {"success": True, **result}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 

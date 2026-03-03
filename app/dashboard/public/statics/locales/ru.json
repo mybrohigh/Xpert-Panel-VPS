@@ -326,5 +326,10 @@
   "adminManager.lifetime.countBadge": "x{{count}}",
   "onlineNow": "Онлайн",
   "todayUsage": "Сегодня",
-  "cpuUsage": "CPU"
+  "cpuUsage": "CPU",
+  "adminManager.action.userDisabled": "Отключил пользователя",
+  "adminManager.meta.userStatusChanged": "Статус: {{from}} -> {{to}}",
+  "adminManager.meta.userDisabled": "Пользователь отключен: {{from}} -> {{to}}",
+  "adminManager.notifications.statusChanged": "Статус: {{from}} -> {{to}}",
+  "adminManager.meta.userResetUsageValue": "Сброс трафика: {{from}} -> {{to}}"
 }

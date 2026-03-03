@@ -323,5 +323,10 @@
   "adminManager.lifetime.countBadge": "x{{count}}",
   "onlineNow": "آنلاین",
   "todayUsage": "امروز",
-  "cpuUsage": "CPU"
+  "cpuUsage": "CPU",
+  "adminManager.action.userDisabled": "غیرفعال‌کردن کاربر",
+  "adminManager.meta.userStatusChanged": "وضعیت: {{from}} -> {{to}}",
+  "adminManager.meta.userDisabled": "کاربر غیرفعال شد: {{from}} -> {{to}}",
+  "adminManager.notifications.statusChanged": "وضعیت: {{from}} -> {{to}}",
+  "adminManager.meta.userResetUsageValue": "ریست مصرف: {{from}} -> {{to}}"
 }

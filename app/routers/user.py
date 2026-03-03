@@ -1,3 +1,4 @@
+import time
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Union
 
@@ -20,6 +21,7 @@ from app.models.user import (
 from app.models.proxy import ProxySettings, ProxyTypes
 from app.utils import report, responses
 from app.xpert.admin_user_traffic_limit_service import get_admin_user_traffic_limit_bytes
+from app.xpert.panel_sync_service import panel_sync_service, build_user_clone_payload
 
 router = APIRouter(tags=["User"], prefix="/api", responses={401: responses._401})
 
@@ -43,6 +45,77 @@ def _apply_admin_user_traffic_cap(user_obj, admin_username: Optional[str]) -> No
     current = getattr(user_obj, "data_limit", None)
     if current is None or current == 0 or current > cap:
         setattr(user_obj, "data_limit", cap)
+
+
+def _collect_clone_sync_failures(sync_result: dict) -> List[str]:
+    failures: List[str] = []
+    for item in (sync_result or {}).get("results", []):
+        status = str(item.get("status") or "").strip().lower()
+        if status in {"created", "updated"}:
+            continue
+        target_id = item.get("target_id")
+        message = str(item.get("message") or item.get("code") or status or "unknown")
+        failures.append(f"target={target_id} status={status or 'unknown'} msg={message[:120]}")
+    return failures
+
+
+def _sync_user_clone(payload: dict) -> None:
+    username = str(payload.get("username") or "").strip()
+    try:
+        first = panel_sync_service.sync_user_to_enabled_targets(payload)
+        failures = _collect_clone_sync_failures(first)
+        if not failures:
+            return
+
+        logger.warning(
+            "Panel sync immediate create had failures for user %s: %s",
+            username or payload.get("username"),
+            " | ".join(failures),
+        )
+
+        # Short retry prevents 30-minute wait for scheduled reconcile on transient errors.
+        time.sleep(2)
+        second = panel_sync_service.sync_user_to_enabled_targets(payload)
+        retry_failures = _collect_clone_sync_failures(second)
+        if retry_failures:
+            logger.error(
+                "Panel sync retry failed for user %s: %s",
+                username or payload.get("username"),
+                " | ".join(retry_failures),
+            )
+        else:
+            logger.info("Panel sync retry succeeded for user %s", username or payload.get("username"))
+    except Exception:
+        logger.exception("Panel sync failed for user %s", username or payload.get("username"))
+
+
+def _sync_user_delete(username: str) -> None:
+    try:
+        panel_sync_service.delete_user_from_enabled_targets(username)
+    except Exception:
+        logger.exception("Panel delete sync failed for user %s", username)
+
+
+def _sync_user_reset(username: str) -> None:
+    try:
+        panel_sync_service.reset_user_in_enabled_targets(username)
+    except Exception:
+        logger.exception("Panel reset sync failed for user %s", username)
+
+
+def _sync_user_revoke(username: str) -> None:
+    try:
+        panel_sync_service.revoke_user_in_enabled_targets(username)
+    except Exception:
+        logger.exception("Panel revoke sync failed for user %s", username)
+
+
+def _sync_many_users_reset(usernames: List[str]) -> None:
+    for username in usernames:
+        try:
+            panel_sync_service.reset_user_in_enabled_targets(username)
+        except Exception:
+            logger.exception("Panel bulk reset sync failed for user %s", username)
 
 
 
@@ -127,6 +200,14 @@ def add_user(
             )
     except Exception:
         pass
+
+    try:
+        clone_payload = build_user_clone_payload(user.model_dump(mode="json"))
+        if clone_payload.get("username"):
+            bg.add_task(_sync_user_clone, clone_payload)
+    except Exception:
+        logger.exception('Failed preparing panel sync payload for "%s"', user.username)
+
     logger.info(f'New user "{dbuser.username}" added')
     return user
 
@@ -225,6 +306,15 @@ def modify_user(
             target_username=user.username,
             meta={"changes": changes} if changes else None,
         )
+        if old_status != user.status and user.status == UserStatus.disabled:
+            crud.create_admin_action_log(
+                db=db,
+                admin=actor,
+                action="user.disabled",
+                target_type="user",
+                target_username=user.username,
+                meta={"from": str(old_status), "to": str(user.status)},
+            )
         if old_data_limit != user.data_limit:
             crud.create_admin_action_log(
                 db=db,
@@ -236,6 +326,13 @@ def modify_user(
             )
     except Exception:
         pass
+
+    try:
+        clone_payload = build_user_clone_payload(user.model_dump(mode="json"))
+        if clone_payload.get("username"):
+            bg.add_task(_sync_user_clone, clone_payload)
+    except Exception:
+        logger.exception('Failed preparing panel sync modify payload for "%s"', user.username)
 
     return user
 
@@ -271,6 +368,7 @@ def remove_user(
     except Exception:
         pass
 
+    bg.add_task(_sync_user_delete, username)
     logger.info(f'User "{dbuser.username}" deleted')
     return {"detail": "User successfully deleted"}
 
@@ -305,6 +403,7 @@ def reset_user_data_usage(
     except Exception:
         pass
 
+    bg.add_task(_sync_user_reset, user.username)
     logger.info(f'User "{dbuser.username}"\'s usage was reset')
     return dbuser
 
@@ -340,6 +439,7 @@ def revoke_user_subscription(
     except Exception:
         pass
 
+    bg.add_task(_sync_user_revoke, user.username)
     return user
 
 
@@ -394,16 +494,40 @@ def get_users(
 
 @router.post("/users/reset", responses={403: responses._403, 404: responses._404})
 def reset_users_data_usage(
-    db: Session = Depends(get_db), admin: Admin = Depends(Admin.check_sudo_admin)
+    bg: BackgroundTasks,
+    db: Session = Depends(get_db),
+    admin: Admin = Depends(Admin.check_sudo_admin),
 ):
     """Reset all users data usage"""
     dbadmin = crud.get_admin(db, admin.username)
+    users_to_reset = crud.get_users(db=db, admin=dbadmin)
+    used_before_by_user = {
+        str(getattr(u, "username", "")): int(getattr(u, "used_traffic", 0) or 0)
+        for u in users_to_reset
+        if str(getattr(u, "username", "")).strip()
+    }
     crud.reset_all_users_data_usage(db=db, admin=dbadmin)
     startup_config = xray.config.include_db_users()
     xray.core.restart(startup_config)
     for node_id, node in list(xray.nodes.items()):
         if node.connected:
             xray.operations.restart_node(node_id, startup_config)
+    try:
+        actor = crud.get_admin(db, admin.username) or admin
+        for username, before_used in used_before_by_user.items():
+            if before_used <= 0:
+                continue
+            crud.create_admin_action_log(
+                db=db,
+                admin=actor,
+                action="user.reset_usage",
+                target_type="user",
+                target_username=username,
+                meta={"used_traffic_before": before_used},
+            )
+    except Exception:
+        pass
+    bg.add_task(_sync_many_users_reset, [u.username for u in users_to_reset])
     return {"detail": "Users successfully reset."}
 
 
@@ -445,6 +569,13 @@ def active_next_plan(
         report.user_data_reset_by_next, user=user, user_admin=dbuser.admin,
     )
 
+    try:
+        clone_payload = build_user_clone_payload(user.model_dump(mode="json"))
+        if clone_payload.get("username"):
+            bg.add_task(_sync_user_clone, clone_payload)
+    except Exception:
+        logger.exception('Failed preparing panel sync next-plan payload for "%s"', user.username)
+
     logger.info(f'User "{dbuser.username}"\'s usage was reset by next plan')
     return dbuser
 
@@ -460,8 +591,18 @@ def get_users_usage(
     """Get all users usage"""
     start, end = validate_dates(start, end)
 
+    admins_filter = owner if admin.is_sudo else [admin.username]
+    unassigned_only = False
+    if admin.is_sudo and owner and "__sudo_self__" in owner:
+        admins_filter = None
+        unassigned_only = True
+
     usages = crud.get_all_users_usages(
-        db=db, start=start, end=end, admin=owner if admin.is_sudo else [admin.username]
+        db=db,
+        start=start,
+        end=end,
+        admin=admins_filter,
+        unassigned_only=unassigned_only,
     )
 
     return {"usages": usages}
@@ -551,5 +692,6 @@ def delete_expired_users(
             ),
             by=admin,
         )
+        bg.add_task(_sync_user_delete, removed_user)
 
     return removed_users

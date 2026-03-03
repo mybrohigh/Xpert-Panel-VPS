@@ -16,7 +16,8 @@ import useGetUser from "hooks/useGetUser";
 import { fetch } from "service/http";
 import { formatBytes, numberWithCommas } from "utils/formatByte";
 
-const ONLINE_WINDOW_SECONDS = 1800;
+// Backend `/api/system` uses a 24h online window; keep frontend scope calc aligned.
+const ONLINE_WINDOW_SECONDS = 24 * 60 * 60;
 
 const parseOnlineAtTs = (value: unknown): number | null => {
   if (value === null || value === undefined) return null;
@@ -121,7 +122,7 @@ const StatisticCard: FC<PropsWithChildren<StatisticCardProps>> = ({
 }) => {
   return (
     <Card
-      p={{ base: 3, md: 6 }}
+      p={{ base: 3, md: 4 }}
       borderWidth="1px"
       borderColor="light-border"
       bg="#F9FAFB"
@@ -137,7 +138,7 @@ const StatisticCard: FC<PropsWithChildren<StatisticCardProps>> = ({
       boxShadow="none"
       borderRadius="12px"
       width="full"
-      minH={{ base: "102px", md: "120px" }}
+      minH={{ base: "96px", md: "86px" }}
       alignSelf="stretch"
       display="flex"
       justifyContent="space-between"
@@ -146,9 +147,9 @@ const StatisticCard: FC<PropsWithChildren<StatisticCardProps>> = ({
       position="relative"
       overflow="hidden"
     >
-      <HStack alignItems="center" columnGap={{ base: 3, md: 4 }} flex="1">
+      <HStack alignItems="center" columnGap={{ base: 3, md: 3 }} flex="1">
         <Box
-          p={{ base: "1.5", md: "2" }}
+          p={{ base: "1.5", md: "1.5" }}
           position="relative"
           color="#4d63ff"
           _before={{
@@ -189,16 +190,16 @@ const StatisticCard: FC<PropsWithChildren<StatisticCardProps>> = ({
           }}
           fontWeight="medium"
           textTransform="capitalize"
-          fontSize={{ base: "2xs", md: "sm" }}
+          fontSize={{ base: "2xs", md: "xs" }}
           textAlign="left"
         >
           {title}
         </Text>
       </HStack>
       <Box
-        fontSize={{ base: "sm", md: "3xl" }}
+        fontSize={{ base: "sm", md: "2xl" }}
         fontWeight="semibold"
-        mt={{ base: 0, md: 2 }}
+        mt={0}
         lineHeight="1.1"
         textAlign="right"
         w="auto"
@@ -325,17 +326,22 @@ export const Statistics: FC<BoxProps> = (props) => {
   const activeUsersValue = scopedData?.users_active ?? systemData?.users_active ?? 0;
   const totalUsersValue = scopedData?.total_user ?? systemData?.total_user ?? 0;
   const scopedOnlineValue = Number(scopedData?.users_online);
+  const hasScopedOnlineValue = Number.isFinite(scopedOnlineValue) && scopedOnlineValue >= 0;
   const systemOnlineCandidates = [
     Number(systemData?.users_online),
     Number(systemData?.online_users),
     Number(systemData?.users_connected),
   ].filter((v) => Number.isFinite(v) && v >= 0);
-  const onlineUsersValue =
-    Number.isFinite(scopedOnlineValue) && scopedOnlineValue >= 0
+  const systemOnlineValue = systemOnlineCandidates.length ? Math.max(...systemOnlineCandidates) : null;
+  const onlineUsersValue = !isSudo
+    ? hasScopedOnlineValue
       ? scopedOnlineValue
-      : systemOnlineCandidates.length
-      ? Math.max(...systemOnlineCandidates)
-      : 0;
+      : 0
+    : hasSelectedAdminScope
+    ? hasScopedOnlineValue
+      ? scopedOnlineValue
+      : 0
+    : systemOnlineValue ?? (hasScopedOnlineValue ? scopedOnlineValue : 0);
   const scopedUsageValue = Number(scopedData?.data_usage ?? 0);
   const scopedLimitValue = Number(adminLimits?.traffic_limit ?? 0);
   const selfUsageValue = Number(scopedData?.data_usage ?? (userData as any)?.users_usage ?? 0);

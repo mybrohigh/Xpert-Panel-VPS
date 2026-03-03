@@ -84,6 +84,7 @@ export const AdminManager = () => {
     const keyMap: Record<string, string> = {
       "user.create": "adminManager.action.userCreate",
       "user.modify": "adminManager.action.userModify",
+      "user.disabled": "adminManager.action.userDisabled",
       "user.delete": "adminManager.action.userDelete",
       "user.reset_usage": "adminManager.action.userResetUsage",
       "user.revoke_sub": "adminManager.action.userRevokeSub",
@@ -181,9 +182,30 @@ export const AdminManager = () => {
       return t("adminManager.meta.userCreate", { status, expire, dataLimit });
     }
 
-    if (action === "user.modify") return t("adminManager.meta.userModify");
+    if (action === "user.modify") {
+      const statusFrom = meta?.changes?.status?.from;
+      const statusTo = meta?.changes?.status?.to;
+      if (statusFrom !== undefined || statusTo !== undefined) {
+        return t("adminManager.meta.userStatusChanged", {
+          from: formatStatus(statusFrom),
+          to: formatStatus(statusTo),
+        });
+      }
+      return t("adminManager.meta.userModify");
+    }
+    if (action === "user.disabled") {
+      return t("adminManager.meta.userDisabled", {
+        from: formatStatus(meta?.from),
+        to: formatStatus(meta?.to),
+      });
+    }
     if (action === "user.delete") return t("adminManager.meta.userDelete");
-    if (action === "user.reset_usage") return t("adminManager.meta.userResetUsage");
+    if (action === "user.reset_usage") {
+      const before = formatBytes(meta?.used_traffic_before);
+      const hasBefore = meta?.used_traffic_before !== undefined && meta?.used_traffic_before !== null;
+      if (hasBefore) return t("adminManager.meta.userResetUsageValue", { from: before, to: formatBytes(0) });
+      return t("adminManager.meta.userResetUsage");
+    }
     if (action === "user.revoke_sub") return t("adminManager.meta.userRevokeSub");
     if (action === "crypto.encrypt") return t("adminManager.meta.cryptoEncrypt");
     if (action === "hwid.reset") return t("adminManager.meta.hwidReset");
@@ -231,9 +253,14 @@ export const AdminManager = () => {
     if (a.action === "user.ip_limit_set") return true;
     if (a.action === "user.traffic_limit_set") return true;
     if (a.action === "user.create") return true;
+    if (a.action === "user.disabled") return true;
+    if (a.action === "user.reset_usage") return true;
     if (a.action === "user.modify") {
       const ch = a.meta?.changes || {};
-      return !!(ch?.expire || ch?.data_limit);
+      const from = String(ch?.status?.from ?? "").toLowerCase();
+      const to = String(ch?.status?.to ?? "").toLowerCase();
+      const hasDisabledChange = from.includes("disabled") || to.includes("disabled");
+      return !!(ch?.expire || ch?.data_limit || hasDisabledChange);
     }
     return false;
   };
@@ -246,6 +273,8 @@ export const AdminManager = () => {
       ts: number;
       target: string;
       admin: string;
+      statusFrom?: unknown;
+      statusTo?: unknown;
       ipLimit?: number;
       trafficOld?: unknown;
       trafficNew?: unknown;
@@ -294,6 +323,10 @@ export const AdminManager = () => {
 
       if (a.action === "user.modify") {
         const changes = a.meta?.changes || {};
+        if (changes?.status) {
+          current.statusFrom = changes.status.from;
+          current.statusTo = changes.status.to;
+        }
         if (changes?.expire) {
           current.expireFrom = changes.expire.from;
           current.expireTo = changes.expire.to;
@@ -312,10 +345,27 @@ export const AdminManager = () => {
           current.trafficNew = a.meta.data_limit;
         }
       }
+
+      if (a.action === "user.disabled") {
+        current.statusFrom = a.meta?.from;
+        current.statusTo = a.meta?.to;
+      }
+      if (a.action === "user.reset_usage") {
+        current.trafficOld = a.meta?.used_traffic_before;
+        current.trafficNew = 0;
+      }
     }
 
     return grouped.map((g) => {
       const parts: string[] = [];
+      if (g.statusFrom !== undefined || g.statusTo !== undefined) {
+        parts.push(
+          t("adminManager.notifications.statusChanged", {
+            from: formatStatus(g.statusFrom),
+            to: formatStatus(g.statusTo),
+          })
+        );
+      }
       if (g.expireFrom !== undefined || g.expireTo !== undefined) {
         parts.push(
           t("adminManager.notifications.expireChanged", {
@@ -482,7 +532,7 @@ export const AdminManager = () => {
   };
 
   return (
-    <Box className="xpert-page-shift">
+    <Box className="xpert-page-shift" w="full" minW={0}>
       <Header />
       <Box p={{ base: 3, md: 5 }}>
         <Stack
@@ -527,11 +577,13 @@ export const AdminManager = () => {
                   colorScheme={selected === a.username ? "blue" : "gray"}
                   size="sm"
                   justifyContent="space-between"
+                  w="full"
+                  minW={0}
                   onClick={() => setSelected(a.username)}
                 >
-                  <HStack w="full" justify="space-between">
-                    <HStack>
-                      <Text>{a.username}</Text>
+                  <HStack w="full" justify="space-between" minW={0}>
+                    <HStack minW={0}>
+                      <Text noOfLines={1}>{a.username}</Text>
                       {a.is_sudo ? <Badge colorScheme="purple">sudo</Badge> : null}
                     </HStack>
                     <Badge colorScheme="blue">{a.actions_24h}</Badge>
@@ -551,52 +603,58 @@ export const AdminManager = () => {
             </HStack>
           ) : (
             <VStack align="stretch" spacing={2}>
-              <HStack justify="space-between">
+              <Stack direction={{ base: "column", sm: "row" }} align={{ base: "stretch", sm: "center" }} justify="space-between" spacing={2}>
                 <Text fontSize="sm">{t("adminManager.lifetime.created")}</Text>
-                <HStack spacing={2}>
+                <HStack spacing={2} justify={{ base: "flex-start", sm: "flex-end" }}>
                   <Badge colorScheme="green">{lifetime?.created_count ?? 0}</Badge>
                   <Button size="xs" variant="outline" onClick={() => openLifetimeModal("created")} isDisabled={!selected}>
                     {t("adminManager.lifetime.viewList")}
                   </Button>
                 </HStack>
-              </HStack>
-              <HStack justify="space-between">
+              </Stack>
+              <Stack direction={{ base: "column", sm: "row" }} align={{ base: "stretch", sm: "center" }} justify="space-between" spacing={2}>
                 <Text fontSize="sm">{t("adminManager.lifetime.extended")}</Text>
-                <HStack spacing={2}>
+                <HStack spacing={2} justify={{ base: "flex-start", sm: "flex-end" }}>
                   <Badge colorScheme="blue">{lifetime?.extended_count ?? 0}</Badge>
                   <Button size="xs" variant="outline" onClick={() => openLifetimeModal("extended")} isDisabled={!selected}>
                     {t("adminManager.lifetime.viewList")}
                   </Button>
                 </HStack>
-              </HStack>
-              <HStack justify="space-between">
+              </Stack>
+              <Stack direction={{ base: "column", sm: "row" }} align={{ base: "stretch", sm: "center" }} justify="space-between" spacing={2}>
                 <Text fontSize="sm">{t("adminManager.lifetime.deleted")}</Text>
-                <HStack spacing={2}>
+                <HStack spacing={2} justify={{ base: "flex-start", sm: "flex-end" }}>
                   <Badge colorScheme="red">{lifetime?.deleted_count ?? 0}</Badge>
                   <Button size="xs" variant="outline" onClick={() => openLifetimeModal("deleted")} isDisabled={!selected}>
                     {t("adminManager.lifetime.viewList")}
                   </Button>
                 </HStack>
-              </HStack>
+              </Stack>
             </VStack>
           )}
         </Box>
         </Flex>
 
         <Box flex="1" borderWidth="1px" borderRadius="lg" p={3} overflow="hidden">
-          <HStack justify="space-between" mb={3}>
-            <HStack>
+          <Stack
+            direction={{ base: "column", md: "row" }}
+            align={{ base: "stretch", md: "center" }}
+            justify="space-between"
+            spacing={2}
+            mb={3}
+          >
+            <Stack direction={{ base: "column", sm: "row" }} align={{ base: "flex-start", sm: "center" }} spacing={2} minW={0}>
               <Text fontWeight="semibold">
                 {t("adminManager.details")}: {selected || "-"}
               </Text>
               {selectedAdmin ? (
-                <>
+                <Flex wrap="wrap" gap={2}>
                   <Badge colorScheme="gray">{t("adminManager.users", { count: selectedAdmin.total_users })}</Badge>
                   <Badge colorScheme="blue">{t("adminManager.actions24h", { count: selectedAdmin.actions_24h })}</Badge>
-                </>
+                </Flex>
               ) : null}
-            </HStack>
-            <HStack>
+            </Stack>
+            <Flex wrap="wrap" gap={2} justify={{ base: "flex-start", md: "flex-end" }}>
               <Box position="relative">
                 <IconButton
                   aria-label={t("adminManager.notifications.title")}
@@ -654,8 +712,8 @@ export const AdminManager = () => {
               >
                 {t("adminManager.next")}
               </Button>
-            </HStack>
-          </HStack>
+            </Flex>
+          </Stack>
 
           {loadingActions ? (
             <HStack py={10} justify="center">
@@ -707,20 +765,36 @@ export const AdminManager = () => {
           <ModalCloseButton />
           <ModalBody pb={4}>
             <VStack align="stretch" spacing={3} maxH="60vh" overflowY="auto">
-              {notifications.map((n) => (
-                <Box key={n.id} borderWidth="1px" borderRadius="md" p={3} bg={n.id > lastSeenNotificationId ? "yellow.50" : "transparent"}>
-                  <Text fontSize="xs" color="gray.500">
-                    {n.created_at?.replace("T", " ").slice(0, 19)}
-                  </Text>
-                  <Text fontSize="sm" fontWeight="semibold">
-                    {n.target_username}
-                  </Text>
-                  <Text fontSize="xs" color="gray.600">
-                    {t("adminManager.notifications.byAdmin", { admin: n.admin_username || "-" })}
-                  </Text>
-                  <Text fontSize="sm">{n.message}</Text>
-                </Box>
-              ))}
+              {notifications.map((n) => {
+                const isUnread = n.id > lastSeenNotificationId;
+                return (
+                  <Box
+                    key={n.id}
+                    borderWidth="1px"
+                    borderRadius="md"
+                    p={3}
+                    bg={isUnread ? "yellow.50" : "transparent"}
+                    borderColor={isUnread ? "yellow.200" : undefined}
+                    _dark={{
+                      bg: isUnread ? "rgba(245, 158, 11, 0.12)" : "rgba(148, 163, 184, 0.06)",
+                      borderColor: isUnread
+                        ? "rgba(251, 191, 36, 0.46)"
+                        : "rgba(148, 163, 184, 0.24)",
+                    }}
+                  >
+                    <Text fontSize="xs" color="gray.500" _dark={{ color: "gray.400" }}>
+                      {n.created_at?.replace("T", " ").slice(0, 19)}
+                    </Text>
+                    <Text fontSize="sm" fontWeight="semibold">
+                      {n.target_username}
+                    </Text>
+                    <Text fontSize="xs" color="gray.600" _dark={{ color: "gray.300" }}>
+                      {t("adminManager.notifications.byAdmin", { admin: n.admin_username || "-" })}
+                    </Text>
+                    <Text fontSize="sm">{n.message}</Text>
+                  </Box>
+                );
+              })}
               {!notifications.length ? (
                 <Text color="gray.500">{t("adminManager.notifications.empty")}</Text>
               ) : null}
@@ -737,15 +811,24 @@ export const AdminManager = () => {
           <ModalBody pb={4}>
             <VStack align="stretch" spacing={2} maxH="60vh" overflowY="auto">
               {lifetimeUsersByType().map((u) => (
-                <HStack key={u.username} justify="space-between" borderWidth="1px" borderRadius="md" p={2}>
+                <Stack
+                  key={u.username}
+                  direction={{ base: "column", sm: "row" }}
+                  align={{ base: "stretch", sm: "center" }}
+                  justify="space-between"
+                  spacing={2}
+                  borderWidth="1px"
+                  borderRadius="md"
+                  p={2}
+                >
                   <Text fontSize="sm" fontWeight="semibold">{u.username}</Text>
-                  <HStack spacing={3}>
+                  <HStack spacing={3} justify={{ base: "flex-start", sm: "flex-end" }}>
                     <Badge colorScheme="purple">{t("adminManager.lifetime.countBadge", { count: u.count })}</Badge>
                     <Text fontSize="xs" color="gray.500">
                       {u.last_at ? u.last_at.replace("T", " ").slice(0, 19) : "-"}
                     </Text>
                   </HStack>
-                </HStack>
+                </Stack>
               ))}
               {!lifetimeUsersByType().length ? (
                 <Text color="gray.500">{t("adminManager.empty")}</Text>

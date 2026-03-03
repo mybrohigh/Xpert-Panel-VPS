@@ -1,4 +1,5 @@
 import {
+  Box,
   BoxProps,
   Button,
   chakra,
@@ -12,7 +13,6 @@ import {
   InputRightElement,
   Select,
   Spinner,
-  VStack,
 } from "@chakra-ui/react";
 import {
   ArrowPathIcon,
@@ -58,6 +58,19 @@ export const Filters: FC<FilterProps> = ({ ...props }) => {
   const [search, setSearch] = useState("");
   const [admins, setAdmins] = useState<AdminItem[]>([]);
   const [me, setMe] = useState<AdminItem | null>(null);
+  const [isScrollBlurActive, setIsScrollBlurActive] = useState(false);
+
+  useEffect(() => {
+    const updateBlurState = () => {
+      setIsScrollBlurActive(window.scrollY > 0);
+    };
+
+    updateBlurState();
+    window.addEventListener("scroll", updateBlurState, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", updateBlurState);
+    };
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -115,15 +128,18 @@ export const Filters: FC<FilterProps> = ({ ...props }) => {
     });
   };
 
-  const selectedValue = filters.admin || "__all__";
+  const selectedValue =
+    filters.admin === me?.username ? "__sudo_self__" : filters.admin || "__all__";
+  const desktopFilterColumns = me?.is_sudo
+    ? "minmax(0, 1fr) minmax(0, 1fr)"
+    : "1fr";
 
   return (
     <Grid
       id="filters"
       templateColumns={{
-        lg: "repeat(4, 1fr)",
-        md: "repeat(4, 1fr)",
-        base: "repeat(1, 1fr)",
+        base: "1fr",
+        md: "minmax(0, 1fr) minmax(0, 1fr) auto",
       }}
       position="sticky"
       top={0}
@@ -134,25 +150,37 @@ export const Filters: FC<FilterProps> = ({ ...props }) => {
         lg: 4,
         base: 0,
       }}
-      bg="var(--chakra-colors-chakra-body-bg)"
-      _dark={{ bg: "#040609" }}
+      bg={isScrollBlurActive ? "rgba(255, 255, 255, 0.42)" : "transparent"}
+      _dark={{
+        bg: isScrollBlurActive ? "rgba(4, 6, 9, 0.44)" : "transparent",
+        borderColor: isScrollBlurActive
+          ? "rgba(148, 163, 184, 0.35)"
+          : "transparent",
+      }}
+      borderBottomWidth="1px"
+      borderColor={isScrollBlurActive ? "rgba(210, 210, 212, 0.7)" : "transparent"}
+      backdropFilter={isScrollBlurActive ? "blur(12px)" : "none"}
+      WebkitBackdropFilter={isScrollBlurActive ? "blur(12px)" : "none"}
+      boxShadow={isScrollBlurActive ? "0 10px 24px rgba(0, 0, 0, 0.12)" : "none"}
+      transition="background-color .18s ease, backdrop-filter .18s ease, border-color .18s ease, box-shadow .18s ease"
       py={4}
       zIndex="docked"
       {...props}
     >
       <GridItem
-        colSpan={{ base: 1, md: 2, lg: 2 }}
+        colSpan={{ base: 1, md: 2 }}
         order={{ base: 2, md: 1 }}
         display="flex"
-        justifyContent={{ base: "center", md: "stretch" }}
+        justifyContent="stretch"
       >
-        <VStack
-          spacing={4}
-          align="center"
-          w="100%"
-          maxW="560px"
+        <Box
+          display="grid"
+          gridTemplateColumns={{ base: "1fr", md: desktopFilterColumns }}
+          gap={3}
+          w="full"
+          minW={0}
         >
-          <InputGroup w="100%" maxW="560px">
+          <InputGroup w="full">
             <InputLeftElement pointerEvents="none" children={<SearchIcon />} />
             <Input
               placeholder={t("search")}
@@ -179,18 +207,17 @@ export const Filters: FC<FilterProps> = ({ ...props }) => {
 
           {me?.is_sudo ? (
             <Select
+              className="admin-filter-select"
               size="md"
               borderColor="light-border"
               _dark={{ bg: "gray.750", borderColor: "gray.600" }}
               value={selectedValue}
               onChange={onAdminFilterChange}
-              w="100%"
-              maxW="560px"
-              alignSelf="center"
+              w="full"
             >
               <option value="__all__">{t("filters.adminAll")}</option>
               <option value="__sudo_self__">
-                {me.username} (sudo)
+                {me?.username} (sudo)
               </option>
               {admins
                 .filter((a) => a.username !== me?.username)
@@ -202,11 +229,10 @@ export const Filters: FC<FilterProps> = ({ ...props }) => {
                 ))}
             </Select>
           ) : null}
-
-        </VStack>
+        </Box>
       </GridItem>
 
-      <GridItem colSpan={{ base: 1, md: 2, lg: 2 }} order={{ base: 1, md: 3 }}>
+      <GridItem colSpan={{ base: 1, md: 1 }} order={{ base: 1, md: 2 }}>
         <HStack justifyContent="flex-end" alignItems="center" h="full">
           <IconButton
             aria-label="refresh users"
