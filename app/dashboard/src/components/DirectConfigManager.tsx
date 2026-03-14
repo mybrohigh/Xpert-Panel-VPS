@@ -271,7 +271,6 @@ export const DirectConfigManager: FC = () => {
 
     setValidating(true);
     try {
-      console.log("Validating config:", newConfig.raw);
       
       const response = await globalThis.fetch("/api/xpert/direct-configs/validate", {
         method: "POST",
@@ -303,7 +302,6 @@ export const DirectConfigManager: FC = () => {
         throw new Error("Empty response from server");
       }
 
-      console.log("Validation result:", result);
       setValidationResult(result);
       
       if (result.valid) {
@@ -440,7 +438,6 @@ export const DirectConfigManager: FC = () => {
         throw new Error("Empty response from server");
       }
 
-      console.log("Batch add result:", result);
 
       toast({
         title: "Batch addition complete",

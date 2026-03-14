@@ -10,18 +10,17 @@ const fetchAdminLoader = async () => {
     try {
         const token = getAuthToken();
         if (!token) {
-            console.log("Router: No token found, redirecting to login");
             throw new Error("No token found");
         }
         
-        console.log("Router: Validating admin token...");
+        
         const response = await fetch("/admin", {
             headers: {
                 Authorization: `Bearer ${token}`,
             },
         });
         
-        console.log("Router: Admin validation successful");
+        
         return response;
     } catch (error) {
         console.error("Router: Admin loader failed:", error);

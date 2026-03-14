@@ -25,10 +25,8 @@ export const fetcher = <T = any>(
     };
   }
   const method = (ops?.method || "GET").toString().toUpperCase();
-  console.log("[API]", method, url, { ...ops, headers: redactHeaders(ops.headers as any) });
   return $fetch<T>(url, ops)
     .then((res) => {
-      console.log("[API OK]", method, url, res);
       return res;
     })
     .catch((err) => {

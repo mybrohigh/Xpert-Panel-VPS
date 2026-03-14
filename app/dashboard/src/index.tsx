@@ -15,24 +15,8 @@ import { theme } from "../chakra.config";
 import App from "./App";
 import "index.scss";
 
-// Log all fetch calls (browser console)
-const originalFetch = window.fetch.bind(window);
-window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
-  const method = (init?.method || "GET").toUpperCase();
-  const url = typeof input === "string" ? input : (input as URL).toString();
-  const headers = new Headers(init?.headers || {});
-  if (headers.has("authorization")) headers.set("authorization", "REDACTED");
-  if (headers.has("Authorization")) headers.set("Authorization", "REDACTED");
-  console.log("[FETCH]", method, url, { ...init, headers: Object.fromEntries(headers.entries()) });
-  try {
-    const res = await originalFetch(input, init);
-    console.log("[FETCH OK]", method, url, res.status);
-    return res;
-  } catch (err) {
-    console.error("[FETCH ERR]", method, url, err);
-    throw err;
-  }
-};
+
+
 
 dayjs.extend(Timezone);
 dayjs.extend(LocalizedFormat);

@@ -26,7 +26,6 @@ export const Dashboard: FC = () => {
     // Добавляем небольшую задержку чтобы убедиться что все компоненты готовы
     const timer = setTimeout(() => {
       try {
-        console.log("Dashboard: Starting initialization...");
         useDashboard.getState().refetchUsers();
         fetchInbounds();
       } catch (error) {

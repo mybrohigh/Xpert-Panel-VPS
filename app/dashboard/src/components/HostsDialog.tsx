@@ -572,7 +572,6 @@ const AccordionInbound: FC<AccordionInboundType> = ({
                                     value={undefined}
                                     isChecked={!field.value}
                                     onChange={(e) => {
-                                      console.log(e.target.checked);
                                       field.onChange(!e.target.checked);
                                     }}
                                   />
