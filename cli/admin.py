@@ -1,4 +1,7 @@
 from typing import Optional, Union
+from pathlib import Path
+import subprocess
+import sys
 
 import typer
 from decouple import UndefinedValueError, config
@@ -6,7 +9,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 from sqlalchemy import func
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, OperationalError
 
 from app.db import GetDB, crud
 from app.db.models import Admin, User
@@ -17,6 +20,19 @@ from . import utils
 
 app = typer.Typer(no_args_is_help=True)
 
+def _maybe_apply_migrations() -> None:
+    root_dir = Path(__file__).resolve().parents[1]
+    alembic_ini = root_dir / "alembic.ini"
+    if not alembic_ini.exists():
+        return
+    try:
+        subprocess.run(
+            [sys.executable, "-m", "alembic", "upgrade", "head"],
+            cwd=str(root_dir),
+            check=True,
+        )
+    except Exception as exc:
+        utils.error(f"Failed to apply migrations: {exc}")
 
 def validate_telegram_id(value: Union[int, str]) -> Union[int, None]:
     if not value:
@@ -100,8 +116,14 @@ def delete_admin(
 def create_admin(
     username: str = typer.Option(..., *utils.FLAGS["username"], show_default=False, prompt=True),
     is_sudo: bool = typer.Option(False, *utils.FLAGS["is_sudo"], prompt=True),
-    password: str = typer.Option(..., prompt=True, confirmation_prompt=True,
-                                 hide_input=True, hidden=True, envvar=utils.PASSWORD_ENVIRON_NAME),
+    password: str = typer.Option(
+        ...,
+        prompt=True,
+        confirmation_prompt=True,
+        hide_input=True,
+        hidden=True,
+        envvar=utils.PASSWORD_ENVIRON_NAME,
+    ),
     telegram_id: str = typer.Option('', *utils.FLAGS["telegram_id"], prompt="Telegram ID",
                                     show_default=False, callback=validate_telegram_id),
     discord_webhook: str = typer.Option('', *utils.FLAGS["discord_webhook"], prompt=True,
@@ -110,18 +132,37 @@ def create_admin(
     """
     Creates an admin
 
-    Password can also be set using the `MARZBAN_ADMIN_PASSWORD` environment variable for non-interactive usages.
+    Password can also be set using the `XPERT_ADMIN_PASSWORD` environment variable for non-interactive usages.
     """
-    with GetDB() as db:
-        try:
-            crud.create_admin(db, AdminCreate(username=username,
-                                              password=password,
-                                              is_sudo=is_sudo,
-                                              telegram_id=telegram_id,
-                                              discord_webhook=discord_webhook))
-            utils.success(f'Admin "{username}" created successfully.')
-        except IntegrityError:
-            utils.error(f'Admin "{username}" already exists!')
+    def _create() -> None:
+        with GetDB() as db:
+            crud.create_admin(
+                db,
+                AdminCreate(
+                    username=username,
+                    password=password,
+                    is_sudo=is_sudo,
+                    telegram_id=telegram_id,
+                    discord_webhook=discord_webhook,
+                ),
+            )
+
+    try:
+        _create()
+        utils.success(f'Admin "{username}" created successfully.')
+    except OperationalError as exc:
+        msg = str(exc).lower()
+        if "no such table" in msg or ("relation" in msg and "admins" in msg):
+            _maybe_apply_migrations()
+            try:
+                _create()
+                utils.success(f'Admin "{username}" created successfully.')
+            except IntegrityError:
+                utils.error(f'Admin "{username}" already exists!')
+        else:
+            raise
+    except IntegrityError:
+        utils.error(f'Admin "{username}" already exists!')
 
 
 @app.command(name="update")

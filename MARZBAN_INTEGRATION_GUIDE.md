@@ -1,37 +1,37 @@
-# Руководство по интеграции с Marzban Panel
+# Руководство по интеграции с Xpert Panel
 
 ## 🎯 Обзор
 
-Система мониторинга трафика полностью интегрирована с Marzban Panel! Теперь кнопки **"Сбросить трафик"** и **"Лимит трафика"** работают как для обычных пользователей Marzban, так и для внешних серверов через Xpert Panel.
+Система мониторинга трафика полностью интегрирована с Xpert Panel! Теперь кнопки **"Сбросить трафик"** и **"Лимит трафика"** работают как для обычных пользователей Xpert, так и для внешних серверов через Xpert Panel.
 
 ## ✅ Что реализовано
 
 ### 🔄 Кнопка "Сбросить трафик"
 - **Эндпоинт:** `POST /api/admin/usage/reset/{username}`
-- **Функционал:** Сбрасывает И Marzban трафик, И внешний трафик
+- **Функционал:** Сбрасывает И Xpert трафик, И внешний трафик
 - **Результат:** Полная очистка статистики использования
 
 ### 📊 Кнопка "Лимит трафика"  
 - **Эндпоинт:** `GET /api/admin/usage/{username}`
-- **Функционал:** Показывает ОБЩЕЕ использование (Marzban + внешний трафик)
+- **Функционал:** Показывает ОБЩЕЕ использование (Xpert + внешний трафик)
 - **Учет:** Внешний трафик добавляется к `users_usage` админа
 
 ### 📈 Детальная статистика
 - **Эндпоинт:** `GET /api/admin/usage/{username}/detailed`
 - **Функционал:** Раздельная статистика по источникам трафика
-- **Данные:** Marzban GB + External GB + лимиты
+- **Данные:** Xpert GB + External GB + лимиты
 
-## 🚀 Использование в Marzban UI
+## 🚀 Использование в Xpert UI
 
 ### 1. Стандартное использование
-Когда вы нажимаете кнопку "Сбросить трафик" в Marzban UI:
+Когда вы нажимаете кнопку "Сбросить трафик" в Xpert UI:
 
 ```javascript
 // UI отправляет запрос на:
 POST /api/admin/usage/reset/admin1
 
 // Система выполняет:
-1. crud.reset_admin_usage() - сброс Marzban трафика
+1. crud.reset_admin_usage() - сброс Xpert трафика
 2. traffic_service.reset_admin_external_traffic() - сброс внешнего трафика
 3. Возвращает обновленный admin объект
 ```
@@ -45,7 +45,7 @@ GET /api/admin/usage/admin1
 
 // Система возвращает:
 {
-  "marzban_usage_bytes": 1073741824,     // Стандартный трафик Marzban
+  "xpert_usage_bytes": 1073741824,     // Стандартный трафик Xpert
   "external_traffic_gb": 2.456,             // Внешний трафик в ГБ
   "total_usage_bytes": 3640646656,        // ОБЩИЙ трафик в байтах
   "traffic_limit_bytes": 10737418240,       // Лимит из админа
@@ -66,7 +66,7 @@ GET /api/admin/usage/admin1/detailed
 // Возвращает полную разбивку:
 {
   "username": "admin1",
-  "marzban_usage_bytes": 1073741824,     // 1.0 GB стандартного
+  "xpert_usage_bytes": 1073741824,     // 1.0 GB стандартного
   "external_traffic": {                       // Статистика внешних серверов
     "external_traffic_gb": 2.456,           // 2.456 GB внешнего
     "external_unique_users": 15,              // 15 уникальных пользователей
@@ -87,7 +87,7 @@ GET /api/admin/usage/admin1/detailed
 
 | Метод | Эндпоинт | Описание |
 |-------|------------|----------|
-| **Сброс всего трафика** | `POST /api/admin/usage/reset/{username}` | Сбрасывает Marzban + внешний трафик |
+| **Сброс всего трафика** | `POST /api/admin/usage/reset/{username}` | Сбрасывает Xpert + внешний трафик |
 | **Общее использование** | `GET /api/admin/usage/{username}` | Возвращает суммарное использование |
 | **Детальная статистика** | `GET /api/admin/usage/{username}/detailed` | Разбивка по источникам трафика |
 
@@ -108,7 +108,7 @@ GET /api/admin/usage/admin1/detailed
 
 # Клиенты использовали внешние серверы:
 # - 2.456 GB через внешние VPN
-# - 1.000 GB через Marzban
+# - 1.000 GB через Xpert
 
 # UI покажет:
 # Total: 3.456 GB / 10.000 GB (34.6% использовано)
@@ -127,7 +127,7 @@ curl -X POST "https://your-domain.com/api/admin/usage/reset/admin1" \
 # Ответ:
 {
   "username": "admin1",
-  "users_usage": 0,                          // Marzban трафик сброшен
+  "users_usage": 0,                          // Xpert трафик сброшен
   "traffic_limit": 10737418240,
   // ... другие поля
 }
@@ -188,7 +188,7 @@ async function fetchAdminUsage(username) {
     limitGB: (data.traffic_limit_bytes / (1024**3)).toFixed(2),
     percentageUsed: data.limit_check?.percentage_used || 0,
     withinLimit: data.limit_check?.within_limit || true,
-    marzbanUsageGB: (data.marzban_usage_bytes / (1024**3)).toFixed(2),
+    xpertUsageGB: (data.xpert_usage_bytes / (1024**3)).toFixed(2),
     externalTrafficGB: data.external_traffic?.external_traffic_gb || 0
   };
 }
@@ -234,13 +234,13 @@ Webhook → API → Traffic Service → SQLite → Статистика
 ```
 UI → API → Traffic Service → SQLite → Агрегация
     ↓
-UI → API → Admin Router → Traffic Service + Marzban → Общий результат
+UI → API → Admin Router → Traffic Service + Xpert → Общий результат
 ```
 
 ### 3. Сброс трафика
 ```
 UI → API → Admin Router → 
-  ├─→ crud.reset_admin_usage() (Marzban)
+  ├─→ crud.reset_admin_usage() (Xpert)
   └─→ traffic_service.reset_admin_external_traffic() (Xpert)
 ```
 
@@ -282,7 +282,7 @@ CREATE TABLE traffic_usage (
 ## 📈 Преимущества интеграции
 
 ### ✅ Для администраторов
-- **Единый интерфейс** - все те же кнопки в Marzban UI
+- **Единый интерфейс** - все те же кнопки в Xpert UI
 - **Полный контроль** - сброс и лимиты работают для всего трафика
 - **Прозрачность** - видно сколько используется внешних vs внутренних серверов
 - **Гибкость** - можно сбросить только внешний трафик
@@ -296,7 +296,7 @@ CREATE TABLE traffic_usage (
 ### ✅ Для системы
 - **Масштабируемость** - SQLite с индексами
 - **Надежность** - обработка ошибок и логирование
-- **Совместимость** - не ломает существующий функционал Marzban
+- **Совместимость** - не ломает существующий функционал Xpert
 - **Безопасность** - проверка лимитов и прав доступа
 
 ## 🚨 Поиск проблем
@@ -321,11 +321,11 @@ CREATE TABLE traffic_usage (
 
 ## 🎉 Результат
 
-**Теперь Marzban Panel полностью контролирует трафик через внешние VPN серверы!**
+**Теперь Xpert Panel полностью контролирует трафик через внешние VPN серверы!**
 
 - ✅ Кнопка "Сбросить трафик" очищает ВЕСЬ трафик
 - ✅ Кнопка "Лимит трафика" учитывает ВЕСЬ трафик  
-- ✅ Статистика показывает разбивку Marzban + Внешний
+- ✅ Статистика показывает разбивку Xpert + Внешний
 - ✅ Вебхуки принимают данные от клиентов
 - ✅ Система готова к использованию
 

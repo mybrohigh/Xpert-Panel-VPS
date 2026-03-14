@@ -9,11 +9,15 @@ import typer
 from typer._completion_shared import Shells
 
 import cli.admin
+import cli.backup
+import cli.captcha
 import cli.subscription
 import cli.user
 
 app = typer.Typer(no_args_is_help=True, add_completion=False)
 app.add_typer(cli.admin.app, name="admin")
+app.add_typer(cli.backup.app, name="backup")
+app.add_typer(cli.captcha.app, name="captcha")
 app.add_typer(cli.subscription.app, name="subscription")
 app.add_typer(cli.user.app, name="user")
 

@@ -122,17 +122,17 @@ async def test_api_endpoints(base_url="http://localhost:8000"):
         except Exception as e:
             print(f"❌ DB info API test error: {e}")
         
-        # Тест Marzban интеграции
+        # Тест Xpert Core интеграции
         try:
-            async with session.get(f"{base_url}/api/xpert/marzban-traffic-stats") as resp:
+            async with session.get(f"{base_url}/api/xpert/core-traffic-stats") as resp:
                 if resp.status == 200:
                     data = await resp.json()
                     external = data.get('users_traffic', {}).get('external_servers', False)
-                    print(f"✅ Marzban integration test passed: external_servers={external}")
+                    print(f"✅ Xpert Core integration test passed: external_servers={external}")
                 else:
-                    print(f"❌ Marzban integration test failed: {resp.status}")
+                    print(f"❌ Xpert Core integration test failed: {resp.status}")
         except Exception as e:
-            print(f"❌ Marzban integration test error: {e}")
+            print(f"❌ Xpert Core integration test error: {e}")
     
     return True
 
@@ -195,8 +195,8 @@ def print_usage_examples():
     print("\n3. Получение глобальной статистики:")
     print("GET /api/xpert/traffic-stats/global?days=30")
     
-    print("\n4. Статистика для Marzban UI:")
-    print("GET /api/xpert/marzban-traffic-stats?days=30")
+    print("\n4. Статистика для Xpert Core UI:")
+    print("GET /api/xpert/core-traffic-stats?days=30")
     
     print("\n5. Очистка старой статистики:")
     print("POST /api/xpert/traffic-stats/cleanup?days=90")
@@ -238,7 +238,7 @@ async def main():
     print("1. Start the Xpert Panel server")
     print("2. Test subscription URLs with tracking")
     print("3. Implement client-side webhook calls")
-    print("4. Monitor traffic in Marzban UI")
+    print("4. Monitor traffic in Xpert Core UI")
 
 
 if __name__ == "__main__":

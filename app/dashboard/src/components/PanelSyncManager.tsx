@@ -193,6 +193,8 @@ export const PanelSyncManager: FC = () => {
         errors: number;
       }>("/api/xpert/panel-sync/sync-all-users", {
         method: "POST",
+        // Full clone reconciliation can take a while on large user lists.
+        timeout: 10 * 60 * 1000,
       });
       toast({
         title: "User clone sync finished",
@@ -200,7 +202,23 @@ export const PanelSyncManager: FC = () => {
         status: result.errors > 0 ? "warning" : "success",
         duration: 7000,
       });
-    } catch (error) {
+    } catch (error: any) {
+      const statusCode = error?.statusCode ?? error?.response?.status;
+      const detail = String(
+        error?.data?.detail ??
+          error?.response?._data?.detail ??
+          error?.message ??
+          ""
+      ).toLowerCase();
+      if (statusCode === 409 || detail.includes("sync already running")) {
+        toast({
+          title: "Sync already running",
+          description: "Please wait until current sync is finished.",
+          status: "info",
+          duration: 4000,
+        });
+        return;
+      }
       toast({
         title: "Failed to sync users",
         status: "error",

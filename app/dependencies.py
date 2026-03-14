@@ -81,6 +81,20 @@ def get_validated_sub(
     if dbuser.sub_revoked_at and dbuser.sub_revoked_at > sub['created_at']:
         raise HTTPException(status_code=404, detail="Not Found")
 
+    # Block subscriptions for disabled/expired/limited users.
+    if dbuser.status in (UserStatus.disabled, UserStatus.expired, UserStatus.limited):
+        raise HTTPException(status_code=404, detail="Not Found")
+
+    # Also block when explicit expire timestamp is in the past (even if status not updated yet).
+    try:
+        if dbuser.expire:
+            expire_ts = int(dbuser.expire)
+            if expire_ts > 0 and expire_ts <= int(datetime.now(timezone.utc).timestamp()):
+                raise HTTPException(status_code=404, detail="Not Found")
+    except Exception:
+        # If expire is malformed, do not crash subscription endpoint.
+        pass
+
     return dbuser
 
 

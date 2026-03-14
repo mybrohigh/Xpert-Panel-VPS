@@ -1,4 +1,4 @@
-# Marzban Inbound Setup for Xpert Panel
+# Xpert Inbound Setup for Xpert Panel
 
 ## 🎯 Universal Port Logic
 

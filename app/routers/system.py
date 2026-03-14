@@ -10,6 +10,8 @@ from app.models.system import SystemStats
 from app.models.user import UserStatus
 from app.utils import responses
 from app.utils.system import cpu_usage, memory_usage, realtime_bandwidth
+from app.utils.features import enabled_features
+from config import XPERT_EDITION, XPANEL_ENABLED
 
 router = APIRouter(tags=["System"], prefix="/api", responses={401: responses._401})
 
@@ -49,6 +51,9 @@ def get_system_stats(
 
     return SystemStats(
         version=__version__,
+        edition=XPERT_EDITION,
+        features=sorted(enabled_features()),
+        xpanel_enabled=bool(XPANEL_ENABLED),
         mem_total=mem.total,
         mem_used=mem.used,
         cpu_cores=cpu.cores,

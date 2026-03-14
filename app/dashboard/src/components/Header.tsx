@@ -37,6 +37,7 @@ import { Link } from "react-router-dom";
 import { updateThemeColor } from "utils/themeColor";
 import { Language } from "./Language";
 import useGetUser from "hooks/useGetUser";
+import { useFeatures } from "hooks/useFeatures";
 
 type HeaderProps = {
   actions?: ReactNode;
@@ -184,6 +185,7 @@ export const Header: FC<HeaderProps> = ({ actions }) => {
     onEditingCrypto,
   } = useDashboard();
   const { t } = useTranslation();
+  const { hasFeature } = useFeatures();
   const { colorMode, toggleColorMode } = useColorMode();
   const [showDonationNotif, setShowDonationNotif] = useState(
     shouldShowDonation()
@@ -258,7 +260,7 @@ export const Header: FC<HeaderProps> = ({ actions }) => {
             Xpert
           </Text>
         </Link>
-        {isSudo() && (
+        {isSudo() && hasFeature("xpanel") && (
           <>
             <Text fontSize={{ base: "xl", md: "2xl" }} color="gray.400">
               |
@@ -271,7 +273,7 @@ export const Header: FC<HeaderProps> = ({ actions }) => {
                 cursor="pointer"
                 _hover={{ color: "primary.500" }}
               >
-                Xpert Panel
+                Xpanel
               </Text>
             </Link>
           </>
@@ -317,19 +319,25 @@ export const Header: FC<HeaderProps> = ({ actions }) => {
                   <MenuItem maxW="170px" fontSize="sm" icon={<ResetUsageIcon />} onClick={onResetAllUsage.bind(null, true)}>
                     {t("resetAllUsage")}
                   </MenuItem>
-                  <MenuItem maxW="170px" fontSize="sm" icon={<AdminLimitsIcon />} onClick={onEditingAdminLimits.bind(null, true)}>
-                    {t("adminLimits.menu")}
-                  </MenuItem>
-                  <Link to="/admin-manager/">
-                    <MenuItem maxW="170px" fontSize="sm" icon={<AdminManagerIcon />} onClick={handleOnClose}>
-                      {t("adminManager.menu")}
+                  {hasFeature("admin_limits") && (
+                    <MenuItem maxW="170px" fontSize="sm" icon={<AdminLimitsIcon />} onClick={onEditingAdminLimits.bind(null, true)}>
+                      {t("adminLimits.menu")}
                     </MenuItem>
-                  </Link>
+                  )}
+                  {hasFeature("admin_manager") && (
+                    <Link to="/admin-manager/">
+                      <MenuItem maxW="170px" fontSize="sm" icon={<AdminManagerIcon />} onClick={handleOnClose}>
+                        {t("adminManager.menu")}
+                      </MenuItem>
+                    </Link>
+                  )}
                 </>
               )}
-              <MenuItem maxW="170px" fontSize="sm" icon={<CryptoLinkIcon />} onClick={onEditingCrypto.bind(null, true)}>
-                {t("cryptoLink.menu")}
-              </MenuItem>
+              {hasFeature("happ_crypto") && (
+                <MenuItem maxW="170px" fontSize="sm" icon={<CryptoLinkIcon />} onClick={onEditingCrypto.bind(null, true)}>
+                  {t("cryptoLink.menu")}
+                </MenuItem>
+              )}
               <Link to={DONATION_URL} target="_blank">
                 <MenuItem maxW="170px" fontSize="sm" icon={<DonationIcon />} position="relative" onClick={handleOnClose}>
                   {t("header.donation")}
@@ -396,19 +404,25 @@ export const Header: FC<HeaderProps> = ({ actions }) => {
                   <Button size="sm" h={SIDE_MENU_BUTTON_HEIGHT} w="full" px={4} textAlign="left" justifyContent="flex-start" leftIcon={<ResetUsageIcon />} onClick={() => { onResetAllUsage(true); closeSideMenu(); }}>
                     {t("resetAllUsage")}
                   </Button>
-                  <Button size="sm" h={SIDE_MENU_BUTTON_HEIGHT} w="full" px={4} textAlign="left" justifyContent="flex-start" leftIcon={<AdminLimitsIcon />} onClick={() => { onEditingAdminLimits(true); closeSideMenu(); }}>
-                    {t("adminLimits.menu")}
-                  </Button>
-                  <Link to="/admin-manager/" onClick={closeSideMenu} style={{ display: "block", width: "100%" }}>
-                    <Button size="sm" h={SIDE_MENU_BUTTON_HEIGHT} px={4} w="full" textAlign="left" justifyContent="flex-start" leftIcon={<AdminManagerIcon />}>
-                      {t("adminManager.menu")}
+                  {hasFeature("admin_limits") && (
+                    <Button size="sm" h={SIDE_MENU_BUTTON_HEIGHT} w="full" px={4} textAlign="left" justifyContent="flex-start" leftIcon={<AdminLimitsIcon />} onClick={() => { onEditingAdminLimits(true); closeSideMenu(); }}>
+                      {t("adminLimits.menu")}
                     </Button>
-                  </Link>
+                  )}
+                  {hasFeature("admin_manager") && (
+                    <Link to="/admin-manager/" onClick={closeSideMenu} style={{ display: "block", width: "100%" }}>
+                      <Button size="sm" h={SIDE_MENU_BUTTON_HEIGHT} px={4} w="full" textAlign="left" justifyContent="flex-start" leftIcon={<AdminManagerIcon />}>
+                        {t("adminManager.menu")}
+                      </Button>
+                    </Link>
+                  )}
                 </>
               )}
-              <Button size="sm" h={SIDE_MENU_BUTTON_HEIGHT} w="full" px={4} textAlign="left" justifyContent="flex-start" leftIcon={<CryptoLinkIcon />} onClick={() => { onEditingCrypto(true); closeSideMenu(); }}>
-                {t("cryptoLink.menu")}
-              </Button>
+              {hasFeature("happ_crypto") && (
+                <Button size="sm" h={SIDE_MENU_BUTTON_HEIGHT} w="full" px={4} textAlign="left" justifyContent="flex-start" leftIcon={<CryptoLinkIcon />} onClick={() => { onEditingCrypto(true); closeSideMenu(); }}>
+                  {t("cryptoLink.menu")}
+                </Button>
+              )}
               <Link to={DONATION_URL} target="_blank" onClick={() => { handleOnClose(); closeSideMenu(); }} style={{ display: "block", width: "100%" }}>
                 <Button size="sm" h={SIDE_MENU_BUTTON_HEIGHT} px={4} w="full" textAlign="left" justifyContent="flex-start" leftIcon={<DonationIcon />} position="relative">
                   {t("header.donation")}

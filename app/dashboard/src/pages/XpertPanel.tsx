@@ -45,10 +45,13 @@ import { Footer } from "components/Footer";
 import { WhitelistManager } from "components/WhitelistManager";
 import { DirectConfigManager } from "components/DirectConfigManager";
 import { PanelSyncManager } from "components/PanelSyncManager";
+import { InstallOtpManager } from "components/InstallOtpManager";
 import { FC, useEffect, useState } from "react";
+import { Navigate } from "react-router-dom";
 import { TrashIcon, ArrowPathIcon, PlusIcon } from "@heroicons/react/24/outline";
 import { fetch } from "../service/http";
 import { getAuthToken } from "../utils/authStorage";
+import { useFeatures } from "../hooks/useFeatures";
 
 const AddIcon = chakra(PlusIcon, { baseStyle: { w: 4, h: 4 } });
 const RepeatIcon = chakra(ArrowPathIcon, { baseStyle: { w: 4, h: 4 } });
@@ -128,6 +131,8 @@ export const XpertPanel: FC = () => {
   const toast = useToast();
   const { isOpen, onOpen, onClose } = useDisclosure();
   const targetIpsModal = useDisclosure();
+  const { hasFeature, isLoading: featuresLoading } = useFeatures();
+  const xpanelEnabled = hasFeature("xpanel");
 
   const loadData = async () => {
     setLoading(true);
@@ -147,10 +152,10 @@ export const XpertPanel: FC = () => {
       setStats(statsRes);
       setConfigs(configsRes);
     } catch (error) {
-      console.error("Failed to load Xpert data:", error);
+      console.error("Failed to load Xpanel data:", error);
       toast({
         title: "Error loading data",
-        description: "Failed to load Xpert Panel data",
+        description: "Failed to load Xpanel data",
         status: "error",
         duration: 5000,
         isClosable: true,
@@ -161,8 +166,13 @@ export const XpertPanel: FC = () => {
   };
 
   useEffect(() => {
+    if (featuresLoading) return;
+    if (!xpanelEnabled) {
+      setLoading(false);
+      return;
+    }
     loadData();
-  }, []);
+  }, [featuresLoading, xpanelEnabled]);
 
   const handleAddSource = async () => {
     if (!newSource.name || !newSource.url) {
@@ -331,24 +341,24 @@ export const XpertPanel: FC = () => {
     }
   };
 
-  const handleSyncMarzban = async () => {
+  const handleSyncCore = async () => {
     setUpdating(true);
     try {
-      const result = await fetch("/api/xpert/sync-marzban", {
+      const result = await fetch("/api/xpert/sync-core", {
         method: "POST",
         headers: { Authorization: `Bearer ${getAuthToken()}` },
       });
       const data = await result.json();
       toast({
-        title: "Marzban sync complete",
-        description: `${data.total_synced || 0} configs synced to Marzban`,
+        title: "Xpert Core sync complete",
+        description: `${data.total_synced || 0} configs synced to Xpert Core`,
         status: "success",
         duration: 5000,
       });
       loadData();
     } catch (error) {
       toast({
-        title: "Error syncing to Marzban",
+        title: "Error syncing to Xpert Core",
         status: "error",
         duration: 3000,
       });
@@ -404,6 +414,10 @@ export const XpertPanel: FC = () => {
     );
   }
 
+  if (!featuresLoading && !xpanelEnabled) {
+    return <Navigate to="/" replace />;
+  }
+
   return (
     <VStack className="xpert-page-shift" justifyContent="space-between" minH="100vh" p={6} rowGap={4}>
       <Box w="full">
@@ -413,7 +427,7 @@ export const XpertPanel: FC = () => {
         {stats && (
           <Card mt="4">
             <CardHeader>
-              <Heading size="md">Xpert Panel Statistics</Heading>
+              <Heading size="md">Xpanel Statistics</Heading>
             </CardHeader>
             <CardBody>
               <Flex gap={4} flexWrap="wrap">
@@ -487,11 +501,11 @@ export const XpertPanel: FC = () => {
                 <Button
                   leftIcon={<RepeatIcon />}
                   colorScheme="purple"
-                  onClick={handleSyncMarzban}
+                  onClick={handleSyncCore}
                   isLoading={updating}
                   size="sm"
                 >
-                  Sync to Marzban
+                  Sync to Xpert Core
                 </Button>
                 <Button colorScheme="green" onClick={onOpen} size="sm">
                   Add Source
@@ -700,6 +714,9 @@ export const XpertPanel: FC = () => {
           </CardBody>
         </Card>
       </Box>
+
+      {/* Installation OTPs */}
+      <InstallOtpManager />
 
       <Footer />
 

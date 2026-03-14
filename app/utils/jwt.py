@@ -14,8 +14,18 @@ from config import JWT_ACCESS_TOKEN_EXPIRE_MINUTES
 @lru_cache(maxsize=None)
 def get_secret_key():
     from app.db import GetDB, get_jwt_secret_key
-    with GetDB() as db:
-        return get_jwt_secret_key(db)
+    try:
+        with GetDB() as db:
+            return get_jwt_secret_key(db)
+    except Exception as e:
+        # Clear cache and retry once
+        get_secret_key.cache_clear()
+        try:
+            with GetDB() as db:
+                return get_jwt_secret_key(db)
+        except Exception:
+            # If still fails, raise the original error
+            raise e
 
 
 def create_admin_token(username: str, is_sudo=False) -> str:

@@ -16,9 +16,11 @@ ENV PYTHONUNBUFFERED=1
 
 WORKDIR /code
 
+COPY scripts/install_latest_xray.sh /code/scripts/install_latest_xray.sh
+
 RUN apt-get update \
     && apt-get install -y --no-install-recommends build-essential curl unzip gcc python3-dev libpq-dev iputils-ping \
-    && curl -L https://github.com/Gozargah/Marzban-scripts/raw/master/install_latest_xray.sh | bash \
+    && /bin/bash /code/scripts/install_latest_xray.sh \
     && rm -rf /var/lib/apt/lists/*
 
 COPY ./requirements.txt /code/
@@ -46,9 +48,10 @@ COPY --from=python-build /usr/local/bin/xray /usr/local/bin/xray
 COPY . /code
 COPY --from=frontend-build /app/dashboard/build /code/app/dashboard/build
 
-RUN ln -s /code/marzban-cli.py /usr/bin/marzban-cli \
-    && chmod +x /usr/bin/marzban-cli \
-    && marzban-cli completion install --shell bash
+RUN ln -s /code/xpert /usr/bin/xpert \
+    && ln -s /code/xpert-cli.py /usr/bin/xpert-cli \
+    && chmod +x /usr/bin/xpert /usr/bin/xpert-cli \
+    && xpert-cli completion install --shell bash
 
 EXPOSE 8000
 

@@ -80,6 +80,26 @@ class AdminActionLog(Base):
     meta = Column(JSON, nullable=True)
 
 
+class InstallOtp(Base):
+    __tablename__ = "install_otps"
+    __table_args__ = (
+        Index("idx_install_otps_expires_at", "expires_at"),
+        Index("idx_install_otps_used_at", "used_at"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    code = Column(String(32), unique=True, index=True, nullable=False)
+    product = Column(String(20), nullable=False, default="xpert")
+    bound_ip = Column(String(128), nullable=True, default=None)
+    edition = Column(String(20), nullable=False, default="standard")
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    expires_at = Column(DateTime, nullable=False)
+    used_at = Column(DateTime, nullable=True, default=None)
+    created_by_admin_id = Column(Integer, ForeignKey("admins.id"), nullable=True)
+    created_by_admin_username = Column(String(34), index=True, nullable=False)
+    note = Column(String(255), nullable=True, default=None)
+
+
 class TrafficUsage(Base):
     __tablename__ = "traffic_usage"
     __table_args__ = (

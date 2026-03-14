@@ -1,13 +1,13 @@
 <p align="center">
-  <a href="https://github.com/gozargah/marzban" target="_blank" rel="noopener noreferrer">
+  <a href="https://github.com/gozargah/xpert" target="_blank" rel="noopener noreferrer">
     <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://github.com/Gozargah/Marzban-docs/raw/master/screenshots/logo-dark.png">
-      <img width="160" height="160" src="https://github.com/Gozargah/Marzban-docs/raw/master/screenshots/logo-light.png">
+      <source media="(prefers-color-scheme: dark)" srcset="https://github.com/Gozargah/Xpert-docs/raw/master/screenshots/logo-dark.png">
+      <img width="160" height="160" src="https://github.com/Gozargah/Xpert-docs/raw/master/screenshots/logo-light.png">
     </picture>
   </a>
 </p>
 
-<h1 align="center"/>Marzban</h1>
+<h1 align="center"/>Xpert</h1>
 
 <p align="center">
     Unified GUI Censorship Resistant Solution Powered by <a href="https://github.com/XTLS/Xray-core">Xray</a>
@@ -16,22 +16,22 @@
 <br/>
 <p align="center">
     <a href="#">
-        <img src="https://img.shields.io/github/actions/workflow/status/gozargah/marzban/build.yml?style=flat-square" />
+        <img src="https://img.shields.io/github/actions/workflow/status/gozargah/xpert/build.yml?style=flat-square" />
     </a>
-    <a href="https://hub.docker.com/r/gozargah/marzban" target="_blank">
-        <img src="https://img.shields.io/docker/pulls/gozargah/marzban?style=flat-square&logo=docker" />
+    <a href="https://hub.docker.com/r/gozargah/xpert" target="_blank">
+        <img src="https://img.shields.io/docker/pulls/gozargah/xpert?style=flat-square&logo=docker" />
     </a>
     <a href="#">
-        <img src="https://img.shields.io/github/license/gozargah/marzban?style=flat-square" />
+        <img src="https://img.shields.io/github/license/gozargah/xpert?style=flat-square" />
     </a>
-    <a href="https://t.me/gozargah_marzban" target="_blank">
+    <a href="https://t.me/gozargah_xpert" target="_blank">
         <img src="https://img.shields.io/badge/telegram-group-blue?style=flat-square&logo=telegram" />
     </a>
     <a href="#">
         <img src="https://img.shields.io/badge/twitter-commiunity-blue?style=flat-square&logo=twitter" />
     </a>
     <a href="#">
-        <img src="https://img.shields.io/github/stars/gozargah/marzban?style=social" />
+        <img src="https://img.shields.io/github/stars/gozargah/xpert?style=social" />
     </a>
 </p>
 
@@ -54,15 +54,15 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/gozargah/marzban" target="_blank" rel="noopener noreferrer" >
-    <img src="https://github.com/Gozargah/Marzban-docs/raw/master/screenshots/preview.png" alt="Marzban screenshots" width="600" height="auto">
+  <a href="https://github.com/gozargah/xpert" target="_blank" rel="noopener noreferrer" >
+    <img src="https://github.com/Gozargah/Xpert-docs/raw/master/screenshots/preview.png" alt="Xpert screenshots" width="600" height="auto">
   </a>
 </p>
 
 ## Table of Contents
 
 - [Overview](#overview)
-  - [Why using Marzban?](#why-using-marzban)
+  - [Why using Xpert?](#why-using-xpert)
     - [Features](#features)
 - [Installation guide](#installation-guide)
 - [Configuration](#configuration)
@@ -70,8 +70,8 @@
 - [API](#api)
 - [Backup](#backup)
 - [Telegram Bot](#telegram-bot)
-- [Marzban CLI](#marzban-cli)
-- [Marzban Node](#marzban-node)
+- [Xpert CLI](#xpert-cli)
+- [Xpert Node](#xpert-node)
 - [Webhook notifications](#webhook-notifications)
 - [Donation](#donation)
 - [License](#license)
@@ -79,17 +79,17 @@
 
 # Overview
 
-Marzban (the Persian word for "border guard" - pronounced /mærz'ban/) is a proxy management tool that provides a simple and easy-to-use user interface for managing hundreds of proxy accounts powered by [Xray-core](https://github.com/XTLS/Xray-core) and built using Python and Reactjs.
+Xpert (the Persian word for "border guard" - pronounced /mærz'ban/) is a proxy management tool that provides a simple and easy-to-use user interface for managing hundreds of proxy accounts powered by [Xray-core](https://github.com/XTLS/Xray-core) and built using Python and Reactjs.
 
-## Why using Marzban?
+## Why using Xpert?
 
-Marzban is user-friendly, feature-rich and reliable. It lets you to create different proxies for your users without any complicated configuration. Using its built-in web UI, you are able to monitor, modify and limit users.
+Xpert is user-friendly, feature-rich and reliable. It lets you to create different proxies for your users without any complicated configuration. Using its built-in web UI, you are able to monitor, modify and limit users.
 
 ### Features
 
 - Built-in **Web UI**
 - Fully **REST API** backend
-- [**Multiple Nodes**](#marzban-node) support (for infrastructure distribution & scalability)
+- [**Multiple Nodes**](#xpert-node) support (for infrastructure distribution & scalability)
 - Supports protocols **Vmess**, **VLESS**, **Trojan** and **Shadowsocks**
 - **Multi-protocol** for a single user
 - **Multi-user** on a single inbound
@@ -108,54 +108,54 @@ Marzban is user-friendly, feature-rich and reliable. It lets you to create diffe
 
 # Installation guide
 
-Run the following command to install Marzban with SQLite database:
+Run the following command to install Xpert with SQLite database:
 
 ```bash
-sudo bash -c "$(curl -sL https://github.com/Gozargah/Marzban-scripts/raw/master/marzban.sh)" @ install
+sudo bash -c "$(curl -sL https://github.com/Gozargah/Xpert-scripts/raw/master/xpert.sh)" @ install
 ```
 
-Run the following command to install Marzban with MySQL database:
+Run the following command to install Xpert with MySQL database:
 
 ```bash
-sudo bash -c "$(curl -sL https://github.com/Gozargah/Marzban-scripts/raw/master/marzban.sh)" @ install --database mysql
+sudo bash -c "$(curl -sL https://github.com/Gozargah/Xpert-scripts/raw/master/xpert.sh)" @ install --database mysql
 ```
 
-Run the following command to install Marzban with MariaDB database:
+Run the following command to install Xpert with MariaDB database:
 ```bash
-sudo bash -c "$(curl -sL https://github.com/Gozargah/Marzban-scripts/raw/master/marzban.sh)" @ install --database mariadb
+sudo bash -c "$(curl -sL https://github.com/Gozargah/Xpert-scripts/raw/master/xpert.sh)" @ install --database mariadb
 ```
 
 Once the installation is complete:
 
 - You will see the logs that you can stop watching them by closing the terminal or pressing `Ctrl+C`
-- The Marzban files will be located at `/opt/marzban`
-- The configuration file can be found at `/opt/marzban/.env` (refer to [configurations](#configuration) section to see variables)
-- The data files will be placed at `/var/lib/marzban`
-- For security reasons, the Marzban dashboard is not accessible via IP address. Therefore, you must [obtain SSL certificate](https://gozargah.github.io/marzban/en/examples/issue-ssl-certificate) and access your Marzban dashboard by opening a web browser and navigating to `https://YOUR_DOMAIN:8000/dashboard/` (replace YOUR_DOMAIN with your actual domain)
-- You can also use SSH port forwarding to access the Marzban dashboard locally without a domain. Replace `user@serverip` with your actual SSH username and server IP and Run the command below:
+- The Xpert files will be located at `/opt/xpert`
+- The configuration file can be found at `/opt/xpert/.env` (refer to [configurations](#configuration) section to see variables)
+- The data files will be placed at `/var/lib/xpert`
+- For security reasons, the Xpert dashboard is not accessible via IP address. Therefore, you must [obtain SSL certificate](https://gozargah.github.io/xpert/en/examples/issue-ssl-certificate) and access your Xpert dashboard by opening a web browser and navigating to `https://YOUR_DOMAIN:8000/dashboard/` (replace YOUR_DOMAIN with your actual domain)
+- You can also use SSH port forwarding to access the Xpert dashboard locally without a domain. Replace `user@serverip` with your actual SSH username and server IP and Run the command below:
 
 ```bash
 ssh -L 8000:localhost:8000 user@serverip
 ```
 
-Finally, you can enter the following link in your browser to access your Marzban dashboard:
+Finally, you can enter the following link in your browser to access your Xpert dashboard:
 
 http://localhost:8000/dashboard/
 
 You will lose access to the dashboard as soon as you close the SSH terminal. Therefore, this method is recommended only for testing purposes.
 
-Next, you need to create a sudo admin for logging into the Marzban dashboard by the following command
+Next, you need to create a sudo admin for logging into the Xpert dashboard by the following command
 
 ```bash
-marzban cli admin create --sudo
+xpert cli admin create --sudo
 ```
 
 That's it! You can login to your dashboard using these credentials
 
-To see the help message of the Marzban script, run the following command
+To see the help message of the Xpert script, run the following command
 
 ```bash
-marzban --help
+xpert --help
 ```
 
 If you are eager to run the project using the source code, check the section below
@@ -173,8 +173,8 @@ bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release
 Clone this project and install the dependencies (you need Python >= 3.8)
 
 ```bash
-git clone https://github.com/Gozargah/Marzban.git
-cd Marzban
+git clone https://github.com/Gozargah/Xpert.git
+cd Xpert
 wget -qO- https://bootstrap.pypa.io/get-pip.py | python3 -
 python3 -m pip install -r requirements.txt
 ```
@@ -187,12 +187,12 @@ Then run the following command to run the database migration scripts
 alembic upgrade head
 ```
 
-If you want to use `marzban-cli`, you should link it to a file in your `$PATH`, make it executable, and install the auto-completion:
+If you want to use `xpert-cli`, you should link it to a file in your `$PATH`, make it executable, and install the auto-completion:
 
 ```bash
-sudo ln -s $(pwd)/marzban-cli.py /usr/bin/marzban-cli
-sudo chmod +x /usr/bin/marzban-cli
-marzban-cli completion install
+sudo ln -s $(pwd)/xpert-cli.py /usr/bin/xpert-cli
+sudo chmod +x /usr/bin/xpert-cli
+xpert-cli completion install
 ```
 
 Now it's time to configuration
@@ -214,11 +214,11 @@ Eventually, launch the application using command below
 python3 main.py
 ```
 
-To launch with linux systemctl (copy marzban.service file to `/var/lib/marzban/marzban.service`)
+To launch with linux systemctl (copy xpert.service file to `/var/lib/xpert/xpert.service`)
 
 ```
-systemctl enable /var/lib/marzban/marzban.service
-systemctl start marzban
+systemctl enable /var/lib/xpert/xpert.service
+systemctl start xpert
 ```
 
 To use with nginx
@@ -240,13 +240,13 @@ server {
     }
 
     # xray-core ws-path: /
-    # client ws-path: /marzban/me/2087
+    # client ws-path: /xpert/me/2087
     #
     # All traffic is proxed through port 443, and send to the xray port(2087, 2088 etc.).
-    # The '/marzban' in location regex path can changed any characters by yourself.
+    # The '/xpert' in location regex path can changed any characters by yourself.
     #
     # /${path}/${username}/${xray-port}
-    location ~* /marzban/.+/(.+)$ {
+    location ~* /xpert/.+/(.+)$ {
         proxy_redirect off;
         proxy_pass http://127.0.0.1:$1/;
         proxy_http_version 1.1;
@@ -265,7 +265,7 @@ or
 server {
     listen 443 ssl http2;
     listen [::]:443 ssl http2;
-    server_name  marzban.example.com;
+    server_name  xpert.example.com;
 
     ssl_certificate      /etc/letsencrypt/live/example.com/fullchain.pem;
     ssl_certificate_key  /etc/letsencrypt/live/example.com/privkey.pem;
@@ -329,73 +329,73 @@ By default the app will be run on `http://localhost:8000/dashboard`. You can con
 
 # Documentation
 
-The [Marzban Documentation](https://gozargah.github.io/marzban) provides all the essential guides to get you started, available in three languages: Farsi, English, and Russian. This documentation requires significant effort to cover all aspects of the project comprehensively. We welcome and appreciate your contributions to help us improve it. You can contribute on this [GitHub repository](https://github.com/Gozargah/gozargah.github.io).
+The [Xpert Documentation](https://gozargah.github.io/xpert) provides all the essential guides to get you started, available in three languages: Farsi, English, and Russian. This documentation requires significant effort to cover all aspects of the project comprehensively. We welcome and appreciate your contributions to help us improve it. You can contribute on this [GitHub repository](https://github.com/Gozargah/gozargah.github.io).
 
 
 # API
 
-Marzban provides a REST API that enables developers to interact with Marzban services programmatically. To view the API documentation in Swagger UI or ReDoc, set the configuration variable `DOCS=True` and navigate to the `/docs` and `/redoc`.
+Xpert provides a REST API that enables developers to interact with Xpert services programmatically. To view the API documentation in Swagger UI or ReDoc, set the configuration variable `DOCS=True` and navigate to the `/docs` and `/redoc`.
 
 
 # Backup
 
-It's always a good idea to backup your Marzban files regularly to prevent data loss in case of system failures or accidental deletion. Here are the steps to backup Marzban:
+It's always a good idea to backup your Xpert files regularly to prevent data loss in case of system failures or accidental deletion. Here are the steps to backup Xpert:
 
-1. By default, all Marzban important files are saved in `/var/lib/marzban` (Docker versions). Copy the entire `/var/lib/marzban` directory to a backup location of your choice, such as an external hard drive or cloud storage.
-2. Additionally, make sure to backup your env file, which contains your configuration variables, and also, your Xray config file. If you installed Marzban using marzban-scripts (recommended installation approach), the env and other configurations should be inside `/opt/marzban/` directory.
+1. By default, all Xpert important files are saved in `/var/lib/xpert` (Docker versions). Copy the entire `/var/lib/xpert` directory to a backup location of your choice, such as an external hard drive or cloud storage.
+2. Additionally, make sure to backup your env file, which contains your configuration variables, and also, your Xray config file. If you installed Xpert using xpert-scripts (recommended installation approach), the env and other configurations should be inside `/opt/xpert/` directory.
 
-Marzban's backup service efficiently zips all necessary files and sends them to your specified Telegram bot. It supports SQLite, MySQL, and MariaDB databases. One of its key features is automation, allowing you to schedule backups every hour. There are no limitations concerning Telegram's upload limits for bots; if a file exceeds the limit, it will be split and sent in multiple parts. Additionally, you can initiate an immediate backup at any time.
+Xpert's backup service efficiently zips all necessary files and sends them to your specified Telegram bot. It supports SQLite, MySQL, and MariaDB databases. One of its key features is automation, allowing you to schedule backups every hour. There are no limitations concerning Telegram's upload limits for bots; if a file exceeds the limit, it will be split and sent in multiple parts. Additionally, you can initiate an immediate backup at any time.
 
-Install the Latest Version of Marzban Command:
+Install the Latest Version of Xpert Command:
 ```bash
-sudo bash -c "$(curl -sL https://github.com/Gozargah/Marzban-scripts/raw/master/marzban.sh)" @ install-script
+sudo bash -c "$(curl -sL https://github.com/Gozargah/Xpert-scripts/raw/master/xpert.sh)" @ install-script
 ```
 
 Setup the Backup Service:
 ```bash
-marzban backup-service
+xpert backup-service
 ```
 
 Get an Immediate Backup:
 ```bash
-marzban backup
+xpert backup
 ```
 
-By following these steps, you can ensure that you have a backup of all your Marzban files and data, as well as your configuration variables and Xray configuration, in case you need to restore them in the future. Remember to update your backups regularly to keep them up-to-date.
+By following these steps, you can ensure that you have a backup of all your Xpert files and data, as well as your configuration variables and Xray configuration, in case you need to restore them in the future. Remember to update your backups regularly to keep them up-to-date.
 
 # Telegram Bot
 
-Marzban comes with an integrated Telegram bot that can handle server management, user creation and removal, and send notifications. This bot can be easily enabled by following a few simple steps, and it provides a convenient way to interact with Marzban without having to log in to the server every time.
+Xpert comes with an integrated Telegram bot that can handle server management, user creation and removal, and send notifications. This bot can be easily enabled by following a few simple steps, and it provides a convenient way to interact with Xpert without having to log in to the server every time.
 
 To enable Telegram Bot:
 
 1. set `TELEGRAM_API_TOKEN` to your bot's API Token
 2. set `TELEGRAM_ADMIN_ID` to your Telegram account's numeric ID, you can get your ID from [@userinfobot](https://t.me/userinfobot)
 
-# Marzban CLI
+# Xpert CLI
 
-Marzban comes with an integrated CLI named `marzban-cli` which allows administrators to have direct interaction with it.
+Xpert comes with an integrated CLI named `xpert-cli` which allows administrators to have direct interaction with it.
 
-If you've installed Marzban using easy install script, you can access the cli commands by running
+If you've installed Xpert using easy install script, you can access the cli commands by running
 
 ```bash
-marzban cli [OPTIONS] COMMAND [ARGS]...
+xpert cli [OPTIONS] COMMAND [ARGS]...
 ```
 
-For more information, You can read [Marzban CLI's documentation](./cli/README.md).
+For more information, You can read [Xpert CLI's documentation](./cli/README.md).
 
-# Marzban Node
+# Xpert Node
 
-The Marzban project introduces the [Marzban-node](https://github.com/gozargah/marzban-node), which revolutionizes infrastructure distribution. With Marzban-node, you can distribute your infrastructure across multiple locations, unlocking benefits such as redundancy, high availability, scalability, flexibility. Marzban-node empowers users to connect to different servers, offering them the flexibility to choose and connect to multiple servers instead of being limited to only one server.
-For more detailed information and installation instructions, please refer to the [Marzban-node official documentation](https://github.com/gozargah/marzban-node)
+The Xpert project introduces the [Xpert-node](https://github.com/gozargah/xpert-node), which revolutionizes infrastructure distribution. With Xpert-node, you can distribute your infrastructure across multiple locations, unlocking benefits such as redundancy, high availability, scalability, flexibility. Xpert-node empowers users to connect to different servers, offering them the flexibility to choose and connect to multiple servers instead of being limited to only one server.
+For more detailed information and installation instructions, please refer to the [Xpert-node official documentation](https://github.com/gozargah/xpert-node)
 
 # Webhook notifications
 
-You can set a webhook address and Marzban will send the notifications to that address.
+You can set a webhook address and Xpert will send the notifications to that address.
 
 the requests will be sent as a post request to the adress provided by `WEBHOOK_ADDRESS` with `WEBHOOK_SECRET` as `x-webhook-secret` in the headers.
 
-Example request sent from Marzban:
+Example request sent from Xpert:
 
 ```
 Headers:
@@ -411,14 +411,14 @@ Content-Type: application/json
 
 
 Body:
-{"username": "marzban_test_user", "action": "user_updated", "enqueued_at": 1680506457.636369, "tries": 0}
+{"username": "xpert_test_user", "action": "user_updated", "enqueued_at": 1680506457.636369, "tries": 0}
 ```
 
 Different action typs are: `user_created`, `user_updated`, `user_deleted`, `user_limited`, `user_expired`, `user_disabled`, `user_enabled`
 
 # Donation
 
-If you found Marzban useful and would like to support its development, you can make a donation in one of the following crypto networks:
+If you found Xpert useful and would like to support its development, you can make a donation in one of the following crypto networks:
 
 - TRON network (TRC20): `TX8kJoDcowQPBFTYHAJR36GyoUKP1Xwzkb`
 - ETH, BNB, MATIC network (ERC20, BEP20): `0xFdc9ad32454FA4fc4733270FCc12ddBFb68b83F7`
@@ -434,16 +434,16 @@ Made in [Unknown!] and Published under [AGPL-3.0](./LICENSE).
 
 # Contributors
 
-We ❤️‍🔥 contributors! If you'd like to contribute, please check out our [Contributing Guidelines](CONTRIBUTING.md) and feel free to submit a pull request or open an issue. We also welcome you to join our [Telegram](https://t.me/gozargah_marzban) group for either support or contributing guidance.
+We ❤️‍🔥 contributors! If you'd like to contribute, please check out our [Contributing Guidelines](CONTRIBUTING.md) and feel free to submit a pull request or open an issue. We also welcome you to join our [Telegram](https://t.me/gozargah_xpert) group for either support or contributing guidance.
 
-Check [open issues](https://github.com/gozargah/marzban/issues) to help the progress of this project.
+Check [open issues](https://github.com/gozargah/xpert/issues) to help the progress of this project.
 
 <p align="center">
-Thanks to the all contributors who have helped improve Marzban:
+Thanks to the all contributors who have helped improve Xpert:
 </p>
 <p align="center">
-<a href="https://github.com/Gozargah/Marzban/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=Gozargah/Marzban" />
+<a href="https://github.com/Gozargah/Xpert/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=Gozargah/Xpert" />
 </a>
 </p>
 <p align="center">

@@ -1,8 +1,13 @@
+from typing import List, Optional
+
 from pydantic import BaseModel
 
 
 class SystemStats(BaseModel):
     version: str
+    edition: Optional[str] = None
+    features: List[str] = []
+    xpanel_enabled: bool = True
     mem_total: int
     mem_used: int
     cpu_cores: int

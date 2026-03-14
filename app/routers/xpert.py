@@ -1,14 +1,16 @@
 from fastapi import APIRouter, HTTPException, Depends, Request
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 from typing import List, Optional
 import requests
 import json
 from datetime import datetime, timedelta
+import threading
 import redis
 
 from app.xpert.service import xpert_service
-from app.xpert.marzban_integration import marzban_integration
+from app.xpert.xpert_core_integration import xpert_core_integration
 from app.xpert.ping_stats import ping_stats_service
 from app.xpert.direct_config_service import direct_config_service
 from app.xpert.panel_sync_service import panel_sync_service
@@ -17,7 +19,11 @@ from app.xpert.hwid_lock_service import (
     set_required_hwid_for_subscription_url,
     set_hwid_limit_for_subscription_url,
     clear_hwid_lock_for_username,
+    get_required_hwid_for_username,
+    get_hwid_limit_for_username,
+    set_required_hwid_for_username,
 )
+from app.xpert.happ_crypto_auto_service import clear_happ_crypto_link_for_username
 from app.xpert.ip_limit_service import (
     DEFAULT_UNIQUE_IP_LIMIT,
     WINDOW_SECONDS_DEFAULT,
@@ -29,18 +35,64 @@ from app.xpert.v2box_hwid_service import (
     get_required_v2box_device_id_for_username,
     set_v2box_settings_for_username,
 )
+from app.xpert.device_limit_service import (
+    DEFAULT_ALLOWED_DEVICES,
+    MAX_ALLOWED_DEVICES_SUDO,
+    enforce_first_device_policy_for_all_users,
+    get_device_settings_for_username,
+    list_devices_for_username,
+    reset_devices_for_username,
+    seed_device_data_from_legacy_sources,
+    set_device_settings_for_username,
+    set_device_status_for_username,
+)
 from app.xpert.admin_user_traffic_limit_service import (
     get_admin_user_traffic_limit_bytes,
     set_admin_user_traffic_limit_bytes,
 )
 from app.models.admin import Admin
-from app.db import Session, crud, get_db
+from app.db import Session, GetDB, crud, get_db
 import config
 from app import logger, xray
+from app.utils.features import feature_enabled
 
-router = APIRouter(prefix="/xpert", tags=["Xpert Panel"])
+router = APIRouter(prefix="/xpert", tags=["Xpanel"])
 
 _redis_client = None
+_panel_sync_manual_lock = threading.Lock()
+
+
+def _require_feature(name: str) -> None:
+    if not feature_enabled(name):
+        raise HTTPException(status_code=404, detail="Not Found")
+
+
+def _require_xpanel() -> None:
+    _require_feature("xpanel")
+
+
+def _require_admin_manager() -> None:
+    _require_feature("admin_manager")
+
+
+def _require_device_limit() -> None:
+    _require_feature("device_limit")
+
+
+def _require_v2box() -> None:
+    _require_feature("v2box_id")
+
+
+def _require_ip_limits() -> None:
+    _require_feature("ip_limits")
+
+
+def _require_happ_crypto() -> None:
+    _require_feature("happ_crypto")
+
+
+def _require_admin_limits() -> None:
+    _require_feature("admin_limits")
 
 
 def _get_redis_client():
@@ -142,6 +194,10 @@ class DirectConfigReorder(BaseModel):
     target_id: int
 
 
+class DirectConfigPermanentUpdate(BaseModel):
+    is_permanent: bool
+
+
 class TargetIPsUpdate(BaseModel):
     target_ips: List[str]
 
@@ -168,9 +224,28 @@ class HWIDResetRequest(BaseModel):
     username: str
 
 
+class HappHWIDLimitRequest(BaseModel):
+    username: str
+    device_id: Optional[str] = None
+
+
 class UniqueIPLimitRequest(BaseModel):
     username: str
     limit: Optional[int] = None
+
+
+class DeviceLimitRequest(BaseModel):
+    username: str
+    limit: Optional[int] = None
+    unlimited: Optional[bool] = False
+
+
+class DeviceStatusRequest(BaseModel):
+    fingerprint: str
+
+
+class DeviceMassEnforceRequest(BaseModel):
+    seed_legacy: bool = True
 
 
 class V2BoxHWIDLimitRequest(BaseModel):
@@ -236,7 +311,7 @@ class DirectConfigResponse(BaseModel):
     packet_loss: float
     is_active: bool
     bypass_whitelist: bool
-    auto_sync_to_marzban: bool
+    auto_sync_to_core: bool
     added_at: str
     added_by: str
 
@@ -248,7 +323,7 @@ def _effective_admin_is_sudo(db: Session, admin: Admin) -> bool:
     return bool(getattr(admin, "is_sudo", False))
 
 
-@router.get("/whitelists")
+@router.get("/whitelists", dependencies=[Depends(_require_xpanel)])
 async def get_whitelists():
     """Получить все белые списки IP"""
     try:
@@ -273,7 +348,7 @@ async def get_whitelists():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/whitelists")
+@router.post("/whitelists", dependencies=[Depends(_require_xpanel)])
 async def create_whitelist(data: dict):
     """Создать новый белый список IP"""
     try:
@@ -290,7 +365,7 @@ async def create_whitelist(data: dict):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/whitelists/{whitelist_id}/hosts")
+@router.post("/whitelists/{whitelist_id}/hosts", dependencies=[Depends(_require_xpanel)])
 async def add_allowed_host(whitelist_id: str, data: dict):
     """Добавить разрешенный хост (IP или домен) в белый список"""
     try:
@@ -314,7 +389,7 @@ async def add_allowed_host(whitelist_id: str, data: dict):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/whitelists/{whitelist_id}/hosts")
+@router.get("/whitelists/{whitelist_id}/hosts", dependencies=[Depends(_require_xpanel)])
 async def get_whitelist_hosts(whitelist_id: str):
     """Получить хосты (IP и домены) белого списка"""
     try:
@@ -343,7 +418,7 @@ async def get_whitelist_hosts(whitelist_id: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.put("/whitelists/{whitelist_id}/hosts/{host}/status")
+@router.put("/whitelists/{whitelist_id}/hosts/{host}/status", dependencies=[Depends(_require_xpanel)])
 async def update_host_status(whitelist_id: str, host: str, data: dict):
     """Обновить статус хоста"""
     try:
@@ -360,7 +435,7 @@ async def update_host_status(whitelist_id: str, host: str, data: dict):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.delete("/whitelists/{whitelist_id}")
+@router.delete("/whitelists/{whitelist_id}", dependencies=[Depends(_require_xpanel)])
 async def delete_whitelist(whitelist_id: str):
     """Удалить белый список"""
     try:
@@ -375,7 +450,7 @@ async def delete_whitelist(whitelist_id: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.delete("/whitelists/{whitelist_id}/hosts/{host}")
+@router.delete("/whitelists/{whitelist_id}/hosts/{host}", dependencies=[Depends(_require_xpanel)])
 async def delete_host_from_whitelist(whitelist_id: str, host: str):
     """Удалить хост из белого списка"""
     try:
@@ -390,7 +465,7 @@ async def delete_host_from_whitelist(whitelist_id: str, host: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/allowed-hosts")
+@router.get("/allowed-hosts", dependencies=[Depends(_require_xpanel)])
 async def get_allowed_hosts():
     """Получить все разрешенные хосты (IP и домены)"""
     try:
@@ -404,7 +479,7 @@ async def get_allowed_hosts():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/filter-servers")
+@router.post("/filter-servers", dependencies=[Depends(_require_xpanel)])
 async def filter_servers_by_host(data: dict):
     """Отфильтровать сервера по белому списку хостов"""
     try:
@@ -426,19 +501,19 @@ async def filter_servers_by_host(data: dict):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-@router.get("/stats")
+@router.get("/stats", dependencies=[Depends(_require_xpanel)])
 async def get_stats():
-    """Получение статистики Xpert Panel"""
+    """Получение статистики Xpanel"""
     return xpert_service.get_stats()
 
 
-@router.get("/target-ips")
+@router.get("/target-ips", dependencies=[Depends(_require_xpanel)])
 async def get_target_ips(admin: Admin = Depends(Admin.get_current)):
     """Получение списка target IPs для проверок."""
     return {"target_ips": xpert_service.get_target_ips()}
 
 
-@router.put("/target-ips")
+@router.put("/target-ips", dependencies=[Depends(_require_xpanel)])
 async def update_target_ips(data: TargetIPsUpdate, admin: Admin = Depends(Admin.get_current)):
     """Обновление списка target IPs для проверок."""
     try:
@@ -448,13 +523,13 @@ async def update_target_ips(data: TargetIPsUpdate, admin: Admin = Depends(Admin.
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/panel-sync/targets")
+@router.get("/panel-sync/targets", dependencies=[Depends(_require_xpanel)])
 async def get_panel_sync_targets(admin: Admin = Depends(Admin.check_sudo_admin)):
     """Получение настроек панелей для клонирования пользователей."""
     return {"targets": panel_sync_service.get_targets()}
 
 
-@router.put("/panel-sync/targets")
+@router.put("/panel-sync/targets", dependencies=[Depends(_require_xpanel)])
 async def save_panel_sync_targets(
     payload: PanelSyncTargetsUpdate,
     admin: Admin = Depends(Admin.check_sudo_admin),
@@ -466,19 +541,27 @@ async def save_panel_sync_targets(
     return {"targets": targets}
 
 
-@router.post("/panel-sync/test")
+@router.post("/panel-sync/test", dependencies=[Depends(_require_xpanel)])
 async def test_panel_sync_targets(admin: Admin = Depends(Admin.check_sudo_admin)):
     """Проверка соединения с целевыми панелями."""
     return {"targets": panel_sync_service.test_targets()}
 
 
-@router.post("/panel-sync/sync-all-users")
+@router.post("/panel-sync/sync-all-users", dependencies=[Depends(_require_xpanel)])
 async def sync_all_users_to_targets(
-    db: Session = Depends(get_db),
     admin: Admin = Depends(Admin.check_sudo_admin),
 ):
     """Ручная синхронизация всех пользователей в целевые панели."""
-    summary = panel_sync_service.sync_all_users_from_db(db)
+    if not _panel_sync_manual_lock.acquire(blocking=False):
+        raise HTTPException(status_code=409, detail="Sync already running")
+    try:
+        def _run_sync() -> dict:
+            with GetDB() as local_db:
+                return panel_sync_service.sync_all_users_from_db(local_db)
+
+        summary = await run_in_threadpool(_run_sync)
+    finally:
+        _panel_sync_manual_lock.release()
     return {
         "total_users": summary.get("total_users", 0),
         "created": summary.get("created", 0),
@@ -489,7 +572,7 @@ async def sync_all_users_to_targets(
     }
 
 
-@router.post("/panel-sync/targets/{target_id}/purge-users")
+@router.post("/panel-sync/targets/{target_id}/purge-users", dependencies=[Depends(_require_xpanel)])
 async def purge_panel_sync_target_users(
     target_id: int,
     admin: Admin = Depends(Admin.check_sudo_admin),
@@ -502,7 +585,7 @@ async def purge_panel_sync_target_users(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/sources")
+@router.get("/sources", dependencies=[Depends(_require_xpanel)])
 async def get_sources():
     """Получение списка источников подписок"""
     sources = xpert_service.get_sources()
@@ -521,7 +604,7 @@ async def get_sources():
     ]
 
 
-@router.post("/sources")
+@router.post("/sources", dependencies=[Depends(_require_xpanel)])
 async def add_source(source: SourceCreate):
     """Добавление источника подписки"""
     try:
@@ -539,7 +622,7 @@ async def add_source(source: SourceCreate):
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.delete("/sources/{source_id}")
+@router.delete("/sources/{source_id}", dependencies=[Depends(_require_xpanel)])
 async def delete_source(source_id: int):
     """Удаление источника подписки"""
     if xpert_service.delete_source(source_id):
@@ -547,7 +630,7 @@ async def delete_source(source_id: int):
     raise HTTPException(status_code=404, detail="Source not found")
 
 
-@router.post("/sources/{source_id}/toggle")
+@router.post("/sources/{source_id}/toggle", dependencies=[Depends(_require_xpanel)])
 async def toggle_source(source_id: int):
     """Включение/выключение источника"""
     source = xpert_service.toggle_source(source_id)
@@ -556,7 +639,7 @@ async def toggle_source(source_id: int):
     raise HTTPException(status_code=404, detail="Source not found")
 
 
-@router.post("/update")
+@router.post("/update", dependencies=[Depends(_require_xpanel)])
 async def force_update():
     """Принудительное обновление подписок"""
     try:
@@ -570,7 +653,7 @@ async def force_update():
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/configs")
+@router.get("/configs", dependencies=[Depends(_require_xpanel)])
 async def get_configs():
     """Получение списка конфигураций"""
     configs = xpert_service.get_all_configs()
@@ -589,7 +672,7 @@ async def get_configs():
     ]
 
 
-@router.post("/test-url")
+@router.post("/test-url", dependencies=[Depends(_require_xpanel)])
 async def test_subscription_url(url_data: dict):
     """Тестирование URL подписки перед добавлением"""
     url = url_data.get("url", "")
@@ -613,17 +696,17 @@ async def test_subscription_url(url_data: dict):
         }
 
 
-@router.post("/sync-marzban")
-async def sync_to_marzban():
-    """Принудительная синхронизация с Marzban"""
+@router.post("/sync-core", dependencies=[Depends(_require_xpanel)])
+async def sync_to_core():
+    """Принудительная синхронизация с Xpert Core"""
     try:
-        result = marzban_integration.sync_active_configs_to_marzban()
+        result = xpert_core_integration.sync_active_configs_to_core()
         return {"success": True, **result}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/ping-report")
+@router.post("/ping-report", dependencies=[Depends(_require_xpanel)])
 async def report_ping(ping_data: PingReport, user_id: int = 1):
     """Запись результата пинга от пользователя"""
     try:
@@ -640,7 +723,7 @@ async def report_ping(ping_data: PingReport, user_id: int = 1):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/server-health/{server}/{port}/{protocol}")
+@router.get("/server-health/{server}/{port}/{protocol}", dependencies=[Depends(_require_xpanel)])
 async def get_server_health(server: str, port: int, protocol: str):
     """Получение статистики здоровья сервера"""
     try:
@@ -650,7 +733,7 @@ async def get_server_health(server: str, port: int, protocol: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/ping-stats")
+@router.get("/ping-stats", dependencies=[Depends(_require_xpanel)])
 async def get_ping_stats():
     """Получение сводной статистики пингов"""
     try:
@@ -659,7 +742,7 @@ async def get_ping_stats():
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/cleanup-stats")
+@router.post("/cleanup-stats", dependencies=[Depends(_require_xpanel)])
 async def cleanup_ping_stats(days: int = 7):
     """Очистка старой статистики"""
     try:
@@ -669,7 +752,7 @@ async def cleanup_ping_stats(days: int = 7):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/top-configs")
+@router.get("/top-configs", dependencies=[Depends(_require_xpanel)])
 async def get_top_configs(limit: int = 10):
     """Получение топ-N конфигов с их score"""
     try:
@@ -721,7 +804,7 @@ async def get_top_configs(limit: int = 10):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/queue-configs")
+@router.get("/queue-configs", dependencies=[Depends(_require_xpanel)])
 async def get_queue_configs():
     """Получение конфигов в очереди (не попавших в топ)"""
     try:
@@ -756,7 +839,7 @@ async def get_queue_configs():
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/sub")
+@router.get("/sub", dependencies=[Depends(_require_xpanel)])
 async def get_subscription(format: str = "universal", user_token: str = None):
     """Получение агрегированной подписки с отслеживанием трафика"""
     content = xpert_service.generate_subscription(format)
@@ -786,7 +869,7 @@ async def get_subscription(format: str = "universal", user_token: str = None):
         "Content-Type": "text/plain; charset=utf-8",
         "Profile-Update-Interval": "1",
         "Subscription-Userinfo": f"upload={traffic_stats.get('upload', 0)}; download={traffic_stats.get('download', 0)}; total={traffic_stats.get('total', 0)}; expire={traffic_stats.get('expire', 0)}",
-        "Profile-Title": "Xpert Panel",
+        "Profile-Title": "Xpanel",
         "Traffic-Webhook": f"{config.XPERT_DOMAIN}/api/xpert/traffic-webhook",
         "User-Token": user_token or "anonymous"
     }
@@ -794,9 +877,9 @@ async def get_subscription(format: str = "universal", user_token: str = None):
     return PlainTextResponse(content=content, headers=headers)
 
 
-@router.get("/direct-configs/sub")
+@router.get("/direct-configs/sub", dependencies=[Depends(_require_xpanel)])
 async def get_direct_configs_subscription(format: str = "universal", user_token: str = None):
-    """Подписка только из Direct Configurations (сырой raw без преобразований Marzban)"""
+    """Подписка только из Direct Configurations (сырой raw без преобразований Xpert Core)"""
     try:
         direct_configs = direct_config_service.get_active_configs()
         content = "\n".join([c.raw for c in direct_configs])
@@ -835,7 +918,7 @@ async def get_direct_configs_subscription(format: str = "universal", user_token:
 
 
 # Direct Configurations API
-@router.get("/direct-configs")
+@router.get("/direct-configs", dependencies=[Depends(_require_xpanel)])
 async def get_direct_configs():
     """Получение всех прямых конфигураций"""
     try:
@@ -855,8 +938,9 @@ async def get_direct_configs():
                     "jitter_ms": c.jitter_ms,
                     "packet_loss": c.packet_loss,
                     "is_active": c.is_active,
+                    "is_permanent": c.is_permanent,
                     "bypass_whitelist": c.bypass_whitelist,
-                    "auto_sync_to_marzban": c.auto_sync_to_marzban,
+                    "auto_sync_to_core": c.auto_sync_to_core,
                     "added_at": c.added_at,
                     "added_by": c.added_by
                 }
@@ -868,7 +952,7 @@ async def get_direct_configs():
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/direct-configs/ping-refresh")
+@router.post("/direct-configs/ping-refresh", dependencies=[Depends(_require_xpanel)])
 async def refresh_direct_configs_ping(admin: Admin = Depends(Admin.get_current)):
     """Ручное обновление ping/status для Direct Configurations."""
     try:
@@ -878,7 +962,7 @@ async def refresh_direct_configs_ping(admin: Admin = Depends(Admin.get_current))
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/direct-configs")
+@router.post("/direct-configs", dependencies=[Depends(_require_xpanel)])
 async def add_direct_config(config_data: DirectConfigCreate, admin: Admin = Depends(Admin.get_current)):
     """Добавление одиночной конфигурации в обход белого списка"""
     try:
@@ -888,14 +972,14 @@ async def add_direct_config(config_data: DirectConfigCreate, admin: Admin = Depe
             added_by=config_data.added_by
         )
         
-        # Автоматическая синхронизация с Marzban если включена
-        if config.auto_sync_to_marzban:
+        # Автоматическая синхронизация с Xpert Core если включена
+        if config.auto_sync_to_core:
             try:
-                marzban_integration.sync_direct_config_to_marzban(config)
+                xpert_core_integration.sync_direct_config_to_core(config)
             except Exception as e:
                 # Не прерываем операцию, но логируем ошибку
                 import logging
-                logging.warning(f"Failed to sync direct config to Marzban: {e}")
+                logging.warning(f"Failed to sync direct config to Xpert Core: {e}")
         
         return {
             "id": config.id,
@@ -907,14 +991,14 @@ async def add_direct_config(config_data: DirectConfigCreate, admin: Admin = Depe
                 "port": config.port,
                 "remarks": config.remarks,
                 "bypass_whitelist": config.bypass_whitelist,
-                "auto_sync_to_marzban": config.auto_sync_to_marzban
+                "auto_sync_to_core": config.auto_sync_to_core
             }
         }
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.post("/direct-configs/batch")
+@router.post("/direct-configs/batch", dependencies=[Depends(_require_xpanel)])
 async def add_direct_configs_batch(configs_data: dict, admin: Admin = Depends(Admin.get_current)):
     """Массовое добавление конфигураций"""
     try:
@@ -937,13 +1021,13 @@ async def add_direct_configs_batch(configs_data: dict, admin: Admin = Depends(Ad
                     added_by=added_by
                 )
                 
-                # Автоматическая синхронизация с Marzban
-                if config.auto_sync_to_marzban:
+                # Автоматическая синхронизация с Xpert Core
+                if config.auto_sync_to_core:
                     try:
-                        marzban_integration.sync_direct_config_to_marzban(config)
+                        xpert_core_integration.sync_direct_config_to_core(config)
                     except Exception as e:
                         import logging
-                        logging.warning(f"Failed to sync batch config {config.id} to Marzban: {e}")
+                        logging.warning(f"Failed to sync batch config {config.id} to Xpert Core: {e}")
                 
                 results.append({
                     "id": config.id,
@@ -975,7 +1059,7 @@ async def add_direct_configs_batch(configs_data: dict, admin: Admin = Depends(Ad
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.put("/direct-configs/{config_id}")
+@router.put("/direct-configs/{config_id}", dependencies=[Depends(_require_xpanel)])
 async def update_direct_config(config_id: int, config_data: DirectConfigUpdate, admin: Admin = Depends(Admin.get_current)):
     """Редактирование прямой конфигурации"""
     try:
@@ -1000,8 +1084,9 @@ async def update_direct_config(config_id: int, config_data: DirectConfigUpdate, 
                 "jitter_ms": config.jitter_ms,
                 "packet_loss": config.packet_loss,
                 "is_active": config.is_active,
+                "is_permanent": config.is_permanent,
                 "bypass_whitelist": config.bypass_whitelist,
-                "auto_sync_to_marzban": config.auto_sync_to_marzban,
+                "auto_sync_to_core": config.auto_sync_to_core,
                 "added_at": config.added_at,
                 "added_by": config.added_by,
             },
@@ -1010,7 +1095,7 @@ async def update_direct_config(config_id: int, config_data: DirectConfigUpdate, 
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.post("/direct-configs/{config_id}/move")
+@router.post("/direct-configs/{config_id}/move", dependencies=[Depends(_require_xpanel)])
 async def move_direct_config(config_id: int, data: DirectConfigMove, admin: Admin = Depends(Admin.get_current)):
     """Перемещение конфигурации вверх/вниз"""
     try:
@@ -1022,7 +1107,7 @@ async def move_direct_config(config_id: int, data: DirectConfigMove, admin: Admi
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.post("/direct-configs/move-batch")
+@router.post("/direct-configs/move-batch", dependencies=[Depends(_require_xpanel)])
 async def move_direct_configs_batch(data: DirectConfigBatchMove, admin: Admin = Depends(Admin.get_current)):
     """Массовое перемещение выбранных конфигураций вверх/вниз"""
     try:
@@ -1034,7 +1119,7 @@ async def move_direct_configs_batch(data: DirectConfigBatchMove, admin: Admin = 
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.post("/direct-configs/reorder")
+@router.post("/direct-configs/reorder", dependencies=[Depends(_require_xpanel)])
 async def reorder_direct_config(data: DirectConfigReorder, admin: Admin = Depends(Admin.get_current)):
     """Перетаскивание (drag&drop): переставить source_id на позицию target_id одним запросом."""
     try:
@@ -1046,7 +1131,7 @@ async def reorder_direct_config(data: DirectConfigReorder, admin: Admin = Depend
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.delete("/direct-configs/{config_id}")
+@router.delete("/direct-configs/{config_id}", dependencies=[Depends(_require_xpanel)])
 async def delete_direct_config(config_id: int, admin: Admin = Depends(Admin.get_current)):
     """Удаление прямой конфигурации"""
     try:
@@ -1059,7 +1144,7 @@ async def delete_direct_config(config_id: int, admin: Admin = Depends(Admin.get_
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.put("/direct-configs/{config_id}/toggle")
+@router.put("/direct-configs/{config_id}/toggle", dependencies=[Depends(_require_xpanel)])
 async def toggle_direct_config(config_id: int, admin: Admin = Depends(Admin.get_current)):
     """Включение/выключение прямой конфигурации"""
     try:
@@ -1072,22 +1157,44 @@ async def toggle_direct_config(config_id: int, admin: Admin = Depends(Admin.get_
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/direct-configs/{config_id}/sync-to-marzban")
-async def sync_direct_config_to_marzban(config_id: int, admin: Admin = Depends(Admin.get_current)):
-    """Принудительная синхронизация конкретной конфигурации с Marzban"""
+@router.put("/direct-configs/{config_id}/permanent", dependencies=[Depends(_require_xpanel)])
+async def set_direct_config_permanent(
+    config_id: int,
+    data: DirectConfigPermanentUpdate,
+    admin: Admin = Depends(Admin.get_current),
+):
+    """Установка/снятие признака permanent для прямой конфигурации."""
+    try:
+        config = direct_config_service.set_permanent(config_id, data.is_permanent)
+        if not config:
+            raise HTTPException(status_code=404, detail="Direct config not found")
+        return {
+            "message": "Direct config permanent updated successfully",
+            "is_permanent": config.is_permanent,
+            "is_active": config.is_active,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/direct-configs/{config_id}/sync-to-core", dependencies=[Depends(_require_xpanel)])
+async def sync_direct_config_to_core(config_id: int, admin: Admin = Depends(Admin.get_current)):
+    """Принудительная синхронизация конкретной конфигурации с Xpert Core"""
     try:
         config = direct_config_service.get_config_by_id(config_id)
         if not config:
             raise HTTPException(status_code=404, detail="Direct config not found")
         
-        result = marzban_integration.sync_direct_config_to_marzban(config)
-        return {"message": "Config synced to Marzban successfully", "result": result}
+        result = xpert_core_integration.sync_direct_config_to_core(config)
+        return {"message": "Config synced to Xpert Core successfully", "result": result}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/marzban-sync/debug")
-async def marzban_sync_debug(admin: Admin = Depends(Admin.get_current)):
+@router.get("/core-sync/debug", dependencies=[Depends(_require_xpanel)])
+async def core_sync_debug(admin: Admin = Depends(Admin.get_current)):
     try:
         from app import xray
 
@@ -1112,7 +1219,7 @@ async def marzban_sync_debug(admin: Admin = Depends(Admin.get_current)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/direct-configs/validate")
+@router.post("/direct-configs/validate", dependencies=[Depends(_require_xpanel)])
 async def validate_direct_config(config_data: dict, admin: Admin = Depends(Admin.get_current)):
     """Валидация конфигурации перед добавлением"""
     try:
@@ -1152,7 +1259,7 @@ async def validate_direct_config(config_data: dict, admin: Admin = Depends(Admin
         }
 
 
-@router.post("/traffic-webhook")
+@router.post("/traffic-webhook", dependencies=[Depends(_require_xpanel)])
 async def traffic_webhook(request: Request):
     """Принимает данные о трафике от клиентов или внешних систем"""
     try:
@@ -1191,7 +1298,7 @@ async def traffic_webhook(request: Request):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/traffic-stats/global")
+@router.get("/traffic-stats/global", dependencies=[Depends(_require_xpanel)])
 async def get_global_traffic_stats(days: int = 30):
     """Глобальная статистика трафика"""
     try:
@@ -1207,7 +1314,7 @@ async def get_global_traffic_stats(days: int = 30):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/traffic-stats/server/{server}/{port}")
+@router.get("/traffic-stats/server/{server}/{port}", dependencies=[Depends(_require_xpanel)])
 async def get_server_traffic_stats(server: str, port: int, days: int = 30):
     """Статистика по конкретному серверу"""
     try:
@@ -1223,7 +1330,7 @@ async def get_server_traffic_stats(server: str, port: int, days: int = 30):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/traffic-stats/database/info")
+@router.get("/traffic-stats/database/info", dependencies=[Depends(_require_xpanel)])
 async def get_database_info():
     """Информация о базе данных статистики"""
     try:
@@ -1239,7 +1346,7 @@ async def get_database_info():
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/traffic-stats/cleanup")
+@router.post("/traffic-stats/cleanup", dependencies=[Depends(_require_xpanel)])
 async def cleanup_traffic_stats(days: int = None):
     """Очистка старой статистики"""
     try:
@@ -1255,7 +1362,7 @@ async def cleanup_traffic_stats(days: int = None):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/traffic-stats/{user_token}")
+@router.get("/traffic-stats/{user_token}", dependencies=[Depends(_require_xpanel)])
 async def get_user_traffic_stats(user_token: str, days: int = 30):
     """Получить статистику трафика пользователя"""
     try:
@@ -1271,10 +1378,10 @@ async def get_user_traffic_stats(user_token: str, days: int = 30):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/traffic-stats/global")
-@router.get("/marzban-traffic-stats")
-async def marzban_traffic_stats(days: int = 30):
-    """Статистика для интеграции с Marzban UI"""
+@router.get("/traffic-stats/global", dependencies=[Depends(_require_xpanel)])
+@router.get("/core-traffic-stats", dependencies=[Depends(_require_xpanel)])
+async def core_traffic_stats(days: int = 30):
+    """Статистика для интеграции с Xpert Core UI"""
     try:
         if not config.XPERT_TRAFFIC_TRACKING_ENABLED:
             return {
@@ -1284,25 +1391,25 @@ async def marzban_traffic_stats(days: int = 30):
                     "total_gb_used": 0,
                     "total_connections": 0,
                     "external_servers": False,
-                    "integration_type": "xpert_panel_disabled"
+                    "integration_type": "xpanel_disabled"
                 }
             }
         
         from app.xpert.traffic_service import traffic_service
         global_stats = traffic_service.get_global_stats(days)
         
-        # Формат ответа совместимый с Marzban
+        # Формат ответа совместимый с Xpert Core
         return {
             "users_traffic": {
                 **global_stats,
                 "external_servers": True,  # Флаг что это внешние сервера
-                "integration_type": "xpert_panel",
+                "integration_type": "xpanel",
                 "data_source": "traffic_monitoring_system"
             }
         }
         
     except Exception as e:
-        logger.error(f"Failed to get marzban traffic stats: {e}")
+        logger.error(f"Failed to get core traffic stats: {e}")
         return {
             "users_traffic": {
                 "total_users": 0,
@@ -1310,12 +1417,12 @@ async def marzban_traffic_stats(days: int = 30):
                 "total_gb_used": 0,
                 "total_connections": 0,
                 "external_servers": False,
-                "integration_type": "xpert_panel_error",
+                "integration_type": "xpanel_error",
                 "error": str(e)
             }
         }
 
-@router.post("/crypto-link")
+@router.post("/crypto-link", dependencies=[Depends(_require_happ_crypto)])
 async def create_crypto_link(
     data: CryptoLinkRequest,
     admin: Admin = Depends(Admin.get_current),
@@ -1323,6 +1430,18 @@ async def create_crypto_link(
 ):
     try:
         payload = {"url": data.url.strip()}
+
+        # Happ lock mode: in client UI this disables edit/share/QR/JSON actions.
+        try:
+            from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+            parts = urlsplit(payload["url"])
+            q = dict(parse_qsl(parts.query, keep_blank_values=True))
+            q["hide-settings"] = "true"
+            payload["url"] = urlunsplit(
+                (parts.scheme, parts.netloc, parts.path, urlencode(q, doseq=True), parts.fragment)
+            )
+        except Exception:
+            pass
 
         hwid_value = (data.hwid or "").strip()
         hwid_limit = data.hwid_limit
@@ -1333,7 +1452,6 @@ async def create_crypto_link(
         # Mark HWID-mode links so main panel raw /sub remains unaffected.
         if hwid_value or (hwid_limit is not None):
             try:
-                from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
                 parts = urlsplit(payload["url"])
                 q = dict(parse_qsl(parts.query, keep_blank_values=True))
                 q["xpert_hwid"] = "1"
@@ -1356,10 +1474,10 @@ async def create_crypto_link(
             except Exception:
                 username_from_url = None
 
-        # sudo=n: can encrypt ONLY own Marzban /sub link from this panel (with or without HWID options)
+        # sudo=n: can encrypt ONLY own Xpert Core /sub link from this panel (with or without HWID options)
         if not admin.is_sudo:
             if not username_from_url:
-                raise HTTPException(status_code=403, detail="Only this panel Marzban /sub links are allowed")
+                raise HTTPException(status_code=403, detail="Only this panel Xpert Core /sub links are allowed")
 
             dbuser = crud.get_user(db, username_from_url)
             if not dbuser or not getattr(dbuser, "admin", None) or dbuser.admin.username != admin.username:
@@ -1373,13 +1491,13 @@ async def create_crypto_link(
         if hwid_value:
             username = set_required_hwid_for_subscription_url(payload["url"], hwid_value)
             if not username:
-                raise HTTPException(status_code=400, detail="HWID mode requires a valid Marzban /sub URL")
+                raise HTTPException(status_code=400, detail="HWID mode requires a valid Xpert Core /sub URL")
             payload["hwid"] = hwid_value
 
         if hwid_limit is not None:
             username = set_hwid_limit_for_subscription_url(payload["url"], int(hwid_limit), hwid_value)
             if not username:
-                raise HTTPException(status_code=400, detail="HWID limit mode requires a valid Marzban /sub URL")
+                raise HTTPException(status_code=400, detail="HWID limit mode requires a valid Xpert Core /sub URL")
 
         # Audit log (do not store full URL/token).
         try:
@@ -1426,7 +1544,7 @@ async def create_crypto_link(
         raise HTTPException(status_code=502, detail="Crypto link generation failed")
 
 
-@router.post("/hwid/reset")
+@router.post("/hwid/reset", dependencies=[Depends(_require_happ_crypto)])
 async def reset_hwid_binding(
     data: HWIDResetRequest,
     admin: Admin = Depends(Admin.get_current),
@@ -1441,6 +1559,8 @@ async def reset_hwid_binding(
         raise HTTPException(status_code=400, detail="username is required")
 
     cleared = clear_hwid_lock_for_username(username)
+    # Drop cached locked-link so plain /sub is restored after HWID reset.
+    clear_happ_crypto_link_for_username(username)
     try:
         crud.create_admin_action_log(
             db=db,
@@ -1455,7 +1575,80 @@ async def reset_hwid_binding(
     return {"cleared": bool(cleared)}
 
 
-@router.get("/ip-limit/{username}")
+@router.get("/hwid/{username}", dependencies=[Depends(_require_happ_crypto)])
+async def get_happ_hwid_limit(
+    username: str,
+    admin: Admin = Depends(Admin.get_current),
+    db: Session = Depends(get_db),
+):
+    username = (username or "").strip()
+    if not username:
+        raise HTTPException(status_code=400, detail="username is required")
+
+    dbuser = crud.get_user(db, username)
+    if not dbuser:
+        raise HTTPException(status_code=404, detail="User not found")
+    if not admin.is_sudo:
+        if not getattr(dbuser, "admin", None) or dbuser.admin.username != admin.username:
+            raise HTTPException(status_code=403, detail="You are not allowed")
+
+    return {
+        "username": username,
+        "device_id": get_required_hwid_for_username(username),
+        "limit": get_hwid_limit_for_username(username),
+        "max_limit": 5,
+    }
+
+
+@router.post("/hwid", dependencies=[Depends(_require_happ_crypto)])
+async def set_happ_hwid_limit(
+    data: HappHWIDLimitRequest,
+    admin: Admin = Depends(Admin.get_current),
+    db: Session = Depends(get_db),
+):
+    username = (data.username or "").strip()
+    if not username:
+        raise HTTPException(status_code=400, detail="username is required")
+
+    dbuser = crud.get_user(db, username)
+    if not dbuser:
+        raise HTTPException(status_code=404, detail="User not found")
+    if not admin.is_sudo:
+        if not getattr(dbuser, "admin", None) or dbuser.admin.username != admin.username:
+            raise HTTPException(status_code=403, detail="You are not allowed")
+
+    device_id_value = (data.device_id or "").strip()
+    if device_id_value:
+        saved = set_required_hwid_for_username(username, device_id_value)
+        required_hwid = saved.get("required_hwid")
+        max_unique_hwid = saved.get("max_unique_hwid")
+    else:
+        clear_hwid_lock_for_username(username)
+        clear_happ_crypto_link_for_username(username)
+        required_hwid = None
+        max_unique_hwid = None
+
+    try:
+        crud.create_admin_action_log(
+            db=db,
+            admin=(crud.get_admin(db, admin.username) or admin),
+            action="user.happ_hwid_set",
+            target_type="user",
+            target_username=username,
+            meta={"device_id": bool(required_hwid), "max_unique_hwid": max_unique_hwid},
+        )
+    except Exception:
+        pass
+
+    return {
+        "username": username,
+        "device_id": required_hwid,
+        "limit": max_unique_hwid,
+        "max_limit": 5,
+    }
+
+
+@router.get("/ip-limit/{username}", dependencies=[Depends(_require_ip_limits)])
 async def get_unique_ip_limit(
     username: str,
     admin: Admin = Depends(Admin.get_current),
@@ -1478,17 +1671,19 @@ async def get_unique_ip_limit(
             raise HTTPException(status_code=403, detail="You are not allowed")
 
     limit = get_unique_ip_limit_for_username(username)
+    disabled = limit <= 0
     max_limit = 5 if admin_is_sudo else 3
     return {
         "username": username,
-        "limit": int(limit),
+        "limit": None if disabled else int(limit),
+        "disabled": bool(disabled),
         "window_seconds": int(WINDOW_SECONDS_DEFAULT),
         "default_limit": int(DEFAULT_UNIQUE_IP_LIMIT),
         "max_limit": int(max_limit),
     }
 
 
-@router.get("/ip-limit-cap")
+@router.get("/ip-limit-cap", dependencies=[Depends(_require_ip_limits)])
 async def get_unique_ip_limit_cap(
     admin: Admin = Depends(Admin.get_current),
     db: Session = Depends(get_db),
@@ -1497,14 +1692,14 @@ async def get_unique_ip_limit_cap(
     return {"max_limit": 5 if admin_is_sudo else 3}
 
 
-@router.post("/ip-limit")
+@router.post("/ip-limit", dependencies=[Depends(_require_ip_limits)])
 async def set_unique_ip_limit(
     data: UniqueIPLimitRequest,
     admin: Admin = Depends(Admin.get_current),
     db: Session = Depends(get_db),
 ):
     """
-    Sets per-user unique IP limit. limit=None or limit==default clears override.
+    Sets per-user unique IP limit. limit=None or limit<=0 disables enforcement.
     доступно админам по своим пользователям, sudo=y по всем.
     """
     username = (data.username or "").strip()
@@ -1526,15 +1721,17 @@ async def set_unique_ip_limit(
             limit = int(limit)
         except Exception:
             raise HTTPException(status_code=400, detail="limit must be an integer")
-        if limit < 1:
-            raise HTTPException(status_code=400, detail="limit must be >= 1")
-        if limit > max_limit:
+        if limit <= 0:
+            limit = None
+        elif limit > max_limit:
             raise HTTPException(
                 status_code=400,
                 detail=f"limit must be <= {max_limit}",
             )
 
     set_unique_ip_limit_for_username(username, limit)
+    effective_limit = get_unique_ip_limit_for_username(username)
+    disabled = effective_limit <= 0
     try:
         crud.create_admin_action_log(
             db=db,
@@ -1542,20 +1739,282 @@ async def set_unique_ip_limit(
             action="user.ip_limit_set",
             target_type="user",
             target_username=username,
-            meta={"limit": int(get_unique_ip_limit_for_username(username))},
+            meta={"limit": None if disabled else int(effective_limit), "disabled": bool(disabled)},
         )
     except Exception:
         pass
     return {
         "username": username,
-        "limit": int(get_unique_ip_limit_for_username(username)),
+        "limit": None if disabled else int(effective_limit),
+        "disabled": bool(disabled),
         "window_seconds": int(WINDOW_SECONDS_DEFAULT),
         "default_limit": int(DEFAULT_UNIQUE_IP_LIMIT),
         "max_limit": int(max_limit),
     }
 
 
-@router.get("/v2box-hwid/{username}")
+@router.get("/device-limit-cap", dependencies=[Depends(_require_device_limit)])
+async def get_device_limit_cap(
+    admin: Admin = Depends(Admin.get_current),
+    db: Session = Depends(get_db),
+):
+    admin_is_sudo = _effective_admin_is_sudo(db, admin)
+    return {
+        "max_limit": int(MAX_ALLOWED_DEVICES_SUDO if admin_is_sudo else DEFAULT_ALLOWED_DEVICES),
+        "allow_unlimited": bool(admin_is_sudo),
+    }
+
+
+@router.get("/device-limit/{username}", dependencies=[Depends(_require_device_limit)])
+async def get_device_limit(
+    username: str,
+    admin: Admin = Depends(Admin.get_current),
+    db: Session = Depends(get_db),
+):
+    username = (username or "").strip()
+    if not username:
+        raise HTTPException(status_code=400, detail="username is required")
+
+    dbuser = crud.get_user(db, username)
+    if not dbuser:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    admin_is_sudo = _effective_admin_is_sudo(db, admin)
+    if not admin_is_sudo:
+        if not getattr(dbuser, "admin", None) or dbuser.admin.username != admin.username:
+            raise HTTPException(status_code=403, detail="You are not allowed")
+
+    settings = get_device_settings_for_username(username)
+    return {
+        "username": username,
+        "limit": int(settings.get("limit") or DEFAULT_ALLOWED_DEVICES),
+        "unlimited": bool(settings.get("unlimited")),
+        "default_limit": int(DEFAULT_ALLOWED_DEVICES),
+        "max_limit": int(MAX_ALLOWED_DEVICES_SUDO if admin_is_sudo else DEFAULT_ALLOWED_DEVICES),
+        "allow_unlimited": bool(admin_is_sudo),
+    }
+
+
+@router.post("/device-limit", dependencies=[Depends(_require_device_limit)])
+async def set_device_limit(
+    data: DeviceLimitRequest,
+    admin: Admin = Depends(Admin.get_current),
+    db: Session = Depends(get_db),
+):
+    username = (data.username or "").strip()
+    if not username:
+        raise HTTPException(status_code=400, detail="username is required")
+
+    dbuser = crud.get_user(db, username)
+    if not dbuser:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    admin_is_sudo = _effective_admin_is_sudo(db, admin)
+    if not admin_is_sudo:
+        if not getattr(dbuser, "admin", None) or dbuser.admin.username != admin.username:
+            raise HTTPException(status_code=403, detail="You are not allowed")
+
+    # sudo=n: fixed one allowed device, no unlimited mode.
+    if not admin_is_sudo:
+        limit = DEFAULT_ALLOWED_DEVICES
+        unlimited = False
+    else:
+        unlimited = bool(data.unlimited)
+        if unlimited:
+            limit = int(data.limit or get_device_settings_for_username(username).get("limit") or DEFAULT_ALLOWED_DEVICES)
+            if limit < 1:
+                limit = DEFAULT_ALLOWED_DEVICES
+        else:
+            try:
+                limit = int(data.limit or DEFAULT_ALLOWED_DEVICES)
+            except Exception:
+                raise HTTPException(status_code=400, detail="limit must be an integer")
+            if limit < 1:
+                raise HTTPException(status_code=400, detail="limit must be >= 1")
+            if limit > MAX_ALLOWED_DEVICES_SUDO:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"limit must be <= {MAX_ALLOWED_DEVICES_SUDO}",
+                )
+
+    saved = set_device_settings_for_username(username, limit=limit, unlimited=unlimited)
+    try:
+        crud.create_admin_action_log(
+            db=db,
+            admin=(crud.get_admin(db, admin.username) or admin),
+            action="user.device_limit_set",
+            target_type="user",
+            target_username=username,
+            meta={"limit": int(saved.get("limit") or DEFAULT_ALLOWED_DEVICES), "unlimited": bool(saved.get("unlimited"))},
+        )
+    except Exception:
+        pass
+
+    return {
+        "username": username,
+        "limit": int(saved.get("limit") or DEFAULT_ALLOWED_DEVICES),
+        "unlimited": bool(saved.get("unlimited")),
+        "default_limit": int(DEFAULT_ALLOWED_DEVICES),
+        "max_limit": int(MAX_ALLOWED_DEVICES_SUDO if admin_is_sudo else DEFAULT_ALLOWED_DEVICES),
+        "allow_unlimited": bool(admin_is_sudo),
+    }
+
+
+@router.get("/devices/{username}", dependencies=[Depends(_require_device_limit)])
+async def get_user_devices(
+    username: str,
+    admin: Admin = Depends(Admin.get_current),
+    db: Session = Depends(get_db),
+):
+    username = (username or "").strip()
+    if not username:
+        raise HTTPException(status_code=400, detail="username is required")
+
+    dbuser = crud.get_user(db, username)
+    if not dbuser:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    admin_is_sudo = _effective_admin_is_sudo(db, admin)
+    if not admin_is_sudo:
+        if not getattr(dbuser, "admin", None) or dbuser.admin.username != admin.username:
+            raise HTTPException(status_code=403, detail="You are not allowed")
+
+    devices = list_devices_for_username(username)
+    return {"username": username, "devices": devices, "count": len(devices)}
+
+
+@router.post("/devices/{username}/reset", dependencies=[Depends(_require_device_limit)])
+async def reset_user_devices(
+    username: str,
+    admin: Admin = Depends(Admin.get_current),
+    db: Session = Depends(get_db),
+):
+    username = (username or "").strip()
+    if not username:
+        raise HTTPException(status_code=400, detail="username is required")
+
+    dbuser = crud.get_user(db, username)
+    if not dbuser:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    admin_is_sudo = _effective_admin_is_sudo(db, admin)
+    if not admin_is_sudo:
+        if not getattr(dbuser, "admin", None) or dbuser.admin.username != admin.username:
+            raise HTTPException(status_code=403, detail="You are not allowed")
+
+    result = reset_devices_for_username(username)
+    try:
+        crud.create_admin_action_log(
+            db=db,
+            admin=(crud.get_admin(db, admin.username) or admin),
+            action="user.device_reset",
+            target_type="user",
+            target_username=username,
+            meta={"cleared": int(result.get("cleared") or 0)},
+        )
+    except Exception:
+        pass
+
+    return {"username": username, "cleared": int(result.get("cleared") or 0)}
+
+
+@router.post("/devices/{username}/ban", dependencies=[Depends(_require_device_limit)])
+async def ban_user_device(
+    username: str,
+    data: DeviceStatusRequest,
+    admin: Admin = Depends(Admin.get_current),
+    db: Session = Depends(get_db),
+):
+    username = (username or "").strip()
+    if not username:
+        raise HTTPException(status_code=400, detail="username is required")
+
+    dbuser = crud.get_user(db, username)
+    if not dbuser:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    admin_is_sudo = _effective_admin_is_sudo(db, admin)
+    if not admin_is_sudo:
+        if not getattr(dbuser, "admin", None) or dbuser.admin.username != admin.username:
+            raise HTTPException(status_code=403, detail="You are not allowed")
+
+    # Any sudo admin may force-ban even the first device.
+    force_ban = bool(admin_is_sudo)
+    rec = set_device_status_for_username(username, data.fingerprint, "banned", force=force_ban)
+    if not rec:
+        raise HTTPException(status_code=404, detail="Device not found")
+
+    try:
+        crud.create_admin_action_log(
+            db=db,
+            admin=(crud.get_admin(db, admin.username) or admin),
+            action="user.device_ban",
+            target_type="user",
+            target_username=username,
+            meta={"fingerprint": (data.fingerprint or "").strip()},
+        )
+    except Exception:
+        pass
+
+    return {"username": username, "device": rec}
+
+
+@router.post("/devices/{username}/unban", dependencies=[Depends(_require_device_limit)])
+async def unban_user_device(
+    username: str,
+    data: DeviceStatusRequest,
+    admin: Admin = Depends(Admin.get_current),
+    db: Session = Depends(get_db),
+):
+    username = (username or "").strip()
+    if not username:
+        raise HTTPException(status_code=400, detail="username is required")
+
+    dbuser = crud.get_user(db, username)
+    if not dbuser:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    admin_is_sudo = _effective_admin_is_sudo(db, admin)
+    if not admin_is_sudo:
+        if not getattr(dbuser, "admin", None) or dbuser.admin.username != admin.username:
+            raise HTTPException(status_code=403, detail="You are not allowed")
+
+    try:
+        rec = set_device_status_for_username(username, data.fingerprint, "allowed")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    if not rec:
+        raise HTTPException(status_code=404, detail="Device not found")
+
+    try:
+        crud.create_admin_action_log(
+            db=db,
+            admin=(crud.get_admin(db, admin.username) or admin),
+            action="user.device_unban",
+            target_type="user",
+            target_username=username,
+            meta={"fingerprint": (data.fingerprint or "").strip()},
+        )
+    except Exception:
+        pass
+
+    return {"username": username, "device": rec}
+
+
+@router.post("/devices/enforce-first", dependencies=[Depends(_require_device_limit)])
+async def enforce_first_device_policy(
+    data: Optional[DeviceMassEnforceRequest] = None,
+    admin: Admin = Depends(Admin.check_sudo_admin),
+):
+    seeded = {"imported_devices": 0, "touched_users": 0}
+    if bool(getattr(data, "seed_legacy", True) if data is not None else True):
+        seeded = seed_device_data_from_legacy_sources()
+    summary = enforce_first_device_policy_for_all_users(default_limit=DEFAULT_ALLOWED_DEVICES)
+    return {"seed": seeded, "summary": summary}
+
+
+@router.get("/v2box-hwid/{username}", dependencies=[Depends(_require_v2box)])
 async def get_v2box_hwid_limit(
     username: str,
     admin: Admin = Depends(Admin.get_current),
@@ -1580,7 +2039,7 @@ async def get_v2box_hwid_limit(
     }
 
 
-@router.post("/v2box-hwid")
+@router.post("/v2box-hwid", dependencies=[Depends(_require_v2box)])
 async def set_v2box_hwid_limit(
     data: V2BoxHWIDLimitRequest,
     admin: Admin = Depends(Admin.get_current),
@@ -1621,7 +2080,7 @@ async def set_v2box_hwid_limit(
     }
 
 
-@router.post("/v2box-hwid/reset")
+@router.post("/v2box-hwid/reset", dependencies=[Depends(_require_v2box)])
 async def reset_v2box_hwid(
     data: V2BoxHWIDResetRequest,
     admin: Admin = Depends(Admin.get_current),
@@ -1655,7 +2114,7 @@ async def reset_v2box_hwid(
     return {"username": username, "cleared": bool(cleared)}
 
 
-@router.get("/admin-user-traffic-limit/{admin_username}")
+@router.get("/admin-user-traffic-limit/{admin_username}", dependencies=[Depends(_require_admin_limits)])
 async def get_admin_user_traffic_limit(
     admin_username: str,
     admin: Admin = Depends(Admin.check_sudo_admin),
@@ -1675,7 +2134,7 @@ async def get_admin_user_traffic_limit(
     }
 
 
-@router.post("/admin-user-traffic-limit")
+@router.post("/admin-user-traffic-limit", dependencies=[Depends(_require_admin_limits)])
 async def set_admin_user_traffic_limit(
     data: AdminUserTrafficLimitRequest,
     admin: Admin = Depends(Admin.check_sudo_admin),
@@ -1745,7 +2204,7 @@ async def set_admin_user_traffic_limit(
     }
 
 
-@router.get("/admin-manager/admins", response_model=List[AdminSummaryItem])
+@router.get("/admin-manager/admins", response_model=List[AdminSummaryItem], dependencies=[Depends(_require_admin_manager)])
 async def admin_manager_admins(
     admin: Admin = Depends(Admin.get_current),
     db: Session = Depends(get_db),
@@ -1777,7 +2236,7 @@ async def admin_manager_admins(
     return payload
 
 
-@router.get("/admin-manager/actions/{admin_username}", response_model=AdminManagerActionsResponse)
+@router.get("/admin-manager/actions/{admin_username}", response_model=AdminManagerActionsResponse, dependencies=[Depends(_require_admin_manager)])
 async def admin_manager_actions(
     admin_username: str,
     limit: int = 100,
@@ -1830,7 +2289,7 @@ async def admin_manager_actions(
     return payload
 
 
-@router.get("/admin-manager/lifetime/{admin_username}", response_model=AdminLifetimeStatsResponse)
+@router.get("/admin-manager/lifetime/{admin_username}", response_model=AdminLifetimeStatsResponse, dependencies=[Depends(_require_admin_manager)])
 async def admin_manager_lifetime_stats(
     admin_username: str,
     admin: Admin = Depends(Admin.get_current),

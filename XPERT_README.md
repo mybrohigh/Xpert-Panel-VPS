@@ -1,15 +1,15 @@
 # ⚡ Xpert Panel
 
-**Modified Marzban Panel** - VPN управление с расширенным функционалом агрегации подписок.
+**Modified Xpert Panel** - VPN управление с расширенным функционалом агрегации подписок.
 
-## 🎯 Отличия от оригинального Marzban
+## 🎯 Отличия от оригинального Xpert
 
 ### Добавленный функционал:
 1. **Агрегация подписок** - прием ссылок на внешние подписки
 2. **Проверка пинга** - автоматическая проверка через целевые IP (93.171.220.198, 185.69.186.175)
 3. **Автообновление** - обновление подписок каждый час
 4. **Фильтрация** - только рабочие конфиги с пингом < 300ms
-5. **Ребрендинг** - название "Xpert Panel" вместо "Marzban"
+5. **Ребрендинг** - название "Xpert Panel" вместо "Xpert"
 
 ## 🚀 Установка
 
@@ -52,10 +52,10 @@ python main.py
 # Основные
 UVICORN_HOST=0.0.0.0
 UVICORN_PORT=8000
-XRAY_JSON=/var/lib/marzban/xray_config.json
+XRAY_JSON=/var/lib/xpert/xray_config.json
 
 # База данных MySQL
-SQLALCHEMY_DATABASE_URL=mysql+pymysql://user:password@localhost/marzban
+SQLALCHEMY_DATABASE_URL=mysql+pymysql://user:password@localhost/xpert
 
 # Целевые IP для проверки пинга
 TARGET_CHECK_IPS=93.171.220.198,185.69.186.175
@@ -101,7 +101,7 @@ DOMAIN=home.turkmendili.ru
 
 ## 📝 Лицензия
 
-Based on [Marzban](https://github.com/Gozargah/Marzban) - AGPL-3.0 License
+Based on [Xpert](https://github.com/Gozargah/Xpert) - AGPL-3.0 License
 
 ## 🔧 Разработка
 
@@ -116,4 +116,4 @@ uvicorn main:app --reload
 
 ---
 
-**Xpert Panel** v1.0.0 | Powered by Marzban + Custom Extensions
+**Xpert Panel** v1.0.0 | Powered by Xpert + Custom Extensions

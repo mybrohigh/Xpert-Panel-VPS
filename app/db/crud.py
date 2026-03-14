@@ -3,13 +3,18 @@ Functions for managing proxy hosts, users, user templates, nodes, and administra
 """
 
 from datetime import datetime, timedelta
+import threading
+import secrets
+import string
 from enum import Enum
 from typing import Dict, List, Optional, Tuple, Union
 
-from sqlalchemy import and_, delete, func, or_
+from sqlalchemy import and_, delete, func, or_, inspect, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Query, Session, joinedload
 from sqlalchemy.sql.functions import coalesce
 
+from app.db.base import engine
 from app.db.models import (
     JWT,
     TLS,
@@ -21,6 +26,7 @@ from app.db.models import (
     NodeUsage,
     NodeUserUsage,
     NotificationReminder,
+    InstallOtp,
     Proxy,
     ProxyHost,
     ProxyInbound,
@@ -70,6 +76,180 @@ def create_admin_action_log(
     db.refresh(item)
     return item
 
+
+def _generate_install_otp_code(length: int = 8) -> str:
+    alphabet = string.digits
+    return "".join(secrets.choice(alphabet) for _ in range(length))
+
+
+_install_otp_lock = threading.Lock()
+_install_otp_checked = False
+
+_ALLOWED_INSTALL_EDITIONS = {"standard", "full", "custom"}
+_ALLOWED_INSTALL_PRODUCTS = {"xpert", "marzban_patch"}
+_DEFAULT_INSTALL_PRODUCT = "xpert"
+
+
+def _ensure_install_otp_table() -> None:
+    global _install_otp_checked
+    if _install_otp_checked:
+        return
+    with _install_otp_lock:
+        if _install_otp_checked:
+            return
+        try:
+            inspector = inspect(engine)
+            if not inspector.has_table("install_otps"):
+                InstallOtp.__table__.create(bind=engine, checkfirst=True)
+            else:
+                columns = {col.get("name") for col in inspector.get_columns("install_otps")}
+                with engine.begin() as conn:
+                    if "edition" not in columns:
+                        conn.execute(
+                            text("ALTER TABLE install_otps ADD COLUMN edition VARCHAR(20)")
+                        )
+                        conn.execute(
+                            text(
+                                "UPDATE install_otps SET edition='standard' "
+                                "WHERE edition IS NULL OR edition=''"
+                            )
+                        )
+                    if "product" not in columns:
+                        conn.execute(
+                            text("ALTER TABLE install_otps ADD COLUMN product VARCHAR(20)")
+                        )
+                        conn.execute(
+                            text(
+                                "UPDATE install_otps SET product='xpert' "
+                                "WHERE product IS NULL OR product=''"
+                            )
+                        )
+                    if "bound_ip" not in columns:
+                        conn.execute(
+                            text("ALTER TABLE install_otps ADD COLUMN bound_ip VARCHAR(128)")
+                        )
+        finally:
+            _install_otp_checked = True
+
+
+def create_install_otp(
+    db: Session,
+    admin: Admin,
+    expires_in_minutes: int = 30,
+    product: str = _DEFAULT_INSTALL_PRODUCT,
+    edition: str = "standard",
+    bound_ip: Optional[str] = None,
+    note: Optional[str] = None,
+) -> InstallOtp:
+    _ensure_install_otp_table()
+    ttl = max(1, min(int(expires_in_minutes or 30), 1440))
+    expires_at = datetime.utcnow() + timedelta(minutes=ttl)
+    admin_username = getattr(admin, "username", "") or ""
+    normalized_product = (product or "").strip().lower() or _DEFAULT_INSTALL_PRODUCT
+    if normalized_product not in _ALLOWED_INSTALL_PRODUCTS:
+        raise ValueError("Invalid product")
+
+    normalized_edition = (edition or "").strip().lower()
+    if normalized_edition not in _ALLOWED_INSTALL_EDITIONS:
+        raise ValueError("Invalid edition")
+
+    for _ in range(6):
+        code = _generate_install_otp_code()
+        item = InstallOtp(
+            code=code,
+            product=normalized_product,
+            bound_ip=bound_ip or None,
+            edition=normalized_edition,
+            expires_at=expires_at,
+            created_by_admin_id=getattr(admin, "id", None),
+            created_by_admin_username=admin_username,
+            note=note or None,
+        )
+        db.add(item)
+        try:
+            db.commit()
+            db.refresh(item)
+            return item
+        except IntegrityError:
+            db.rollback()
+            continue
+
+    raise ValueError("Failed to generate unique OTP code")
+
+
+def list_install_otps(
+    db: Session,
+    limit: int = 25,
+) -> List[InstallOtp]:
+    _ensure_install_otp_table()
+    safe_limit = max(1, min(int(limit or 25), 100))
+    return (
+        db.query(InstallOtp)
+        .order_by(InstallOtp.created_at.desc())
+        .limit(safe_limit)
+        .all()
+    )
+
+
+def _normalize_install_otp_code(code: str) -> str:
+    if not code:
+        return ""
+    return "".join(ch for ch in str(code).strip() if ch.isdigit())
+
+
+def verify_install_otp(db: Session, code: str, consume: bool = True):
+    _ensure_install_otp_table()
+    now = datetime.utcnow()
+    normalized = _normalize_install_otp_code(code)
+    if not normalized:
+        return "invalid", None
+
+    item = db.query(InstallOtp).filter(InstallOtp.code == normalized).first()
+    if not item:
+        return "invalid", None
+    if item.used_at:
+        return "used", item
+    if item.expires_at and item.expires_at <= now:
+        return "expired", item
+    if not consume:
+        return "ok", item
+
+    updated = (
+        db.query(InstallOtp)
+        .filter(
+            InstallOtp.code == normalized,
+            InstallOtp.used_at.is_(None),
+            InstallOtp.expires_at > now,
+        )
+        .update({InstallOtp.used_at: now}, synchronize_session=False)
+    )
+
+    if updated:
+        db.commit()
+        item = db.query(InstallOtp).filter(InstallOtp.code == normalized).first()
+        return "ok", item
+
+    item = db.query(InstallOtp).filter(InstallOtp.code == normalized).first()
+    if not item:
+        return "invalid", None
+    if item.used_at:
+        return "used", item
+    if item.expires_at and item.expires_at <= now:
+        return "expired", item
+    return "invalid", item
+
+
+def delete_install_otp(db: Session, otp_id: int) -> Optional[InstallOtp]:
+    _ensure_install_otp_table()
+    if not otp_id:
+        return None
+    item = db.query(InstallOtp).filter(InstallOtp.id == otp_id).first()
+    if not item:
+        return None
+    db.delete(item)
+    db.commit()
+    return item
+
 from app.models.user_template import UserTemplateCreate, UserTemplateModify
 from app.utils.helpers import calculate_expiration_days, calculate_usage_percent
 from config import NOTIFY_DAYS_LEFT, NOTIFY_REACHED_USAGE_PERCENT, USERS_AUTODELETE_DAYS
@@ -83,7 +263,7 @@ def add_default_host(db: Session, inbound: ProxyInbound):
         db (Session): Database session.
         inbound (ProxyInbound): Proxy inbound to add the default host to.
     """
-    host = ProxyHost(remark="🚀 Marz ({USERNAME}) [{PROTOCOL} - {TRANSPORT}]", address="{SERVER_IP}", inbound=inbound)
+    host = ProxyHost(remark="🚀 Xpert ({USERNAME}) [{PROTOCOL} - {TRANSPORT}]", address="{SERVER_IP}", inbound=inbound)
     db.add(host)
     db.commit()
 
@@ -930,7 +1110,23 @@ def get_jwt_secret_key(db: Session) -> str:
     Returns:
         str: JWT secret key.
     """
-    return db.query(JWT).first().secret_key
+    jwt_record = db.query(JWT).first()
+    if not jwt_record:
+        # Create JWT secret if it doesn't exist
+        import os
+        from app import logger
+        secret_key = os.urandom(32).hex()
+        try:
+            new_jwt = JWT(secret_key=secret_key)
+            db.add(new_jwt)
+            db.commit()
+            logger.info("Created new JWT secret key")
+            return secret_key
+        except Exception as e:
+            logger.error(f"Failed to create JWT secret key: {e}")
+            db.rollback()
+            raise ValueError("Failed to initialize JWT secret key")
+    return jwt_record.secret_key
 
 
 def get_tls_certificate(db: Session) -> TLS:
@@ -1050,7 +1246,7 @@ def partial_update_admin(db: Session, dbadmin: Admin, modified_admin: AdminParti
 
 def remove_admin(db: Session, dbadmin: Admin) -> Admin:
     """
-    Removes an admin from the database.
+    Removes an admin from the database, handling all FK dependencies first.
 
     Args:
         db (Session): Database session.
@@ -1059,6 +1255,25 @@ def remove_admin(db: Session, dbadmin: Admin) -> Admin:
     Returns:
         Admin: The removed admin object.
     """
+    # 1. Delete admin usage logs
+    db.query(AdminUsageLogs).filter(AdminUsageLogs.admin_id == dbadmin.id).delete()
+
+    # 2. Nullify admin_id in action logs (preserve logs for audit)
+    db.query(AdminActionLog).filter(AdminActionLog.admin_id == dbadmin.id).update(
+        {AdminActionLog.admin_id: None}, synchronize_session=False
+    )
+
+    # 3. Nullify admin_id for users created by this admin
+    db.query(User).filter(User.admin_id == dbadmin.id).update(
+        {User.admin_id: None}, synchronize_session=False
+    )
+
+    # 4. Nullify created_by_admin_id in install OTPs
+    db.query(InstallOtp).filter(InstallOtp.created_by_admin_id == dbadmin.id).update(
+        {InstallOtp.created_by_admin_id: None}, synchronize_session=False
+    )
+
+    # 5. Delete the admin
     db.delete(dbadmin)
     db.commit()
     return dbadmin

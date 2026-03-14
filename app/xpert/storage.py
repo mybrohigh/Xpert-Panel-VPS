@@ -8,7 +8,7 @@ from app.xpert.models import SubscriptionSource, AggregatedConfig
 
 logger = logging.getLogger(__name__)
 
-DATA_DIR = os.environ.get("XPERT_DATA_DIR", "/var/lib/marzban/xpert")
+DATA_DIR = os.environ.get("XPERT_DATA_DIR", "/var/lib/xpert")
 
 
 class XpertStorage:

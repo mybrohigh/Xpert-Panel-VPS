@@ -1,4 +1,4 @@
-# Dashboard UI for marzban
+# Dashboard UI for xpert
 
 ## Requirements
 
@@ -25,7 +25,7 @@ Copy `example.env` to `.env` then set the backend api address:
 
 | Name          | Description                                                                          |
 | ------------- | ------------------------------------------------------------------------------------ |
-| VITE_BASE_API | The api url of the deployed backend ([Marzban](https://github.com/gozargah/Marzban)) |
+| VITE_BASE_API | The api url of the deployed backend ([Xpert](https://github.com/gozargah/Xpert)) |
 
 ## Start development server
 

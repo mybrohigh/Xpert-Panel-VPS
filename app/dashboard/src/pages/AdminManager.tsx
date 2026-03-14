@@ -27,10 +27,11 @@ import {
 import { ArrowLeftIcon, BellIcon } from "@heroicons/react/24/outline";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useNavigate } from "react-router-dom";
+import { Navigate, useNavigate } from "react-router-dom";
 import { Header } from "components/Header";
 import { Footer } from "components/Footer";
 import { fetch } from "../service/http";
+import { useFeatures } from "hooks/useFeatures";
 
 const BackIcon = chakra(ArrowLeftIcon);
 const Bell = chakra(BellIcon);
@@ -79,6 +80,11 @@ export const AdminManager = () => {
   const { t } = useTranslation();
   const toast = useToast();
   const navigate = useNavigate();
+  const { hasFeature, isLoading } = useFeatures();
+
+  if (!isLoading && !hasFeature("admin_manager")) {
+    return <Navigate to="/" replace />;
+  }
 
   const actionLabel = (action: string): string => {
     const keyMap: Record<string, string> = {

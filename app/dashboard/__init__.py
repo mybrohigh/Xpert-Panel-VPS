@@ -39,7 +39,7 @@ def run_dev():
 
 
 def run_build():
-    if not build_dir.is_dir():
+    if not build_dir.is_dir() or not statics_dir.is_dir():
         build()
 
     # Use dashboard path for Koyeb compatibility  
@@ -54,16 +54,23 @@ def run_build():
         StaticFiles(directory=build_dir, html=True),
         name="dashboard"
     )
-    app.mount(
-        '/statics/',
-        StaticFiles(directory=statics_dir, html=True),
-        name="statics"
-    )
-    app.mount(
-        '/assets/',
-        StaticFiles(directory=assets_dir, html=True),
-        name="assets"
-    )
+    if statics_dir.is_dir():
+        app.mount(
+            '/statics/',
+            StaticFiles(directory=statics_dir, html=True),
+            name="statics"
+        )
+    else:
+        print(f"Statics dir missing, skipping mount: {statics_dir}")
+
+    if assets_dir.is_dir():
+        app.mount(
+            '/assets/',
+            StaticFiles(directory=assets_dir, html=True),
+            name="assets"
+        )
+    else:
+        print(f"Assets dir missing, skipping mount: {assets_dir}")
 
     @app.api_route("/site.webmanifest", methods=["GET", "HEAD"], include_in_schema=False)
     def site_webmanifest_alias():

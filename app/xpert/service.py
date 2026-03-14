@@ -9,7 +9,7 @@ from typing import List, Optional
 from app.xpert.models import SubscriptionSource, AggregatedConfig
 from app.xpert.storage import storage
 from app.xpert.checker import checker
-from app.xpert.marzban_integration import marzban_integration
+from app.xpert.xpert_core_integration import xpert_core_integration
 from app.xpert.direct_config_service import direct_config_service
 import config as app_config
 
@@ -186,14 +186,14 @@ class XpertService:
         storage.save_configs(all_configs)
         logger.info(f"Subscription update complete: {active_configs}/{total_configs} active configs")
         
-        # Синхронизация с Marzban
+        # Синхронизация с Xpert Core
         try:
-            sync_result = marzban_integration.sync_active_configs_to_marzban()
-            logger.info(f"Marzban sync result: {sync_result}")
+            sync_result = xpert_core_integration.sync_active_configs_to_core()
+            logger.info(f"Xpert Core sync result: {sync_result}")
             # NOTE: do not cleanup hosts globally here.
             # Cleanup removed user-created and non-Xpert hosts unexpectedly.
         except Exception as e:
-            logger.error(f"Marzban integration failed: {e}")
+            logger.error(f"Xpert Core integration failed: {e}")
         
         return {"active_configs": active_configs, "total_configs": total_configs}
     

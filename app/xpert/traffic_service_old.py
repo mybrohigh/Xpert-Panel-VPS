@@ -377,7 +377,7 @@ class TrafficService:
             }
     
     def get_admin_traffic_usage(self, admin_username: str, days: int = 30) -> Dict:
-        """Получает статистику трафика для админа (интеграция с Marzban)"""
+        """Получает статистику трафика для админа (интеграция с Xpert Core)"""
         try:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
@@ -418,7 +418,7 @@ class TrafficService:
             }
         
         def reset_admin_external_traffic(self, admin_username: str) -> Dict:
-            """Сброс внешнего трафика для админа (интеграция с Marzban)"""
+            """Сброс внешнего трафика для админа (интеграция с Xpert Core)"""
             try:
                 conn = sqlite3.connect(self.db_path)
                 cursor = conn.cursor()

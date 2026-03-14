@@ -1,4 +1,5 @@
 import base64
+import json
 import logging
 import random
 import secrets
@@ -6,6 +7,7 @@ from collections import defaultdict
 from datetime import datetime as dt
 from datetime import timedelta
 from typing import TYPE_CHECKING, List, Literal, Union
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from jdatetime import date as jd
 
@@ -46,6 +48,72 @@ STATUS_TEXTS = {
     "on_hold": ONHOLD_STATUS_TEXT,
 }
 
+def _v2box_device_id_case(device_id: str) -> str:
+    value = (device_id or "").strip()
+    if not value:
+        return ""
+    if value[:1].islower():
+        value = value[0].upper() + value[1:]
+    return value
+
+
+def _inject_device_id_into_vmess(link: str, device_id: str) -> str:
+    payload = link[len("vmess://") :]
+    if not payload:
+        return link
+    padded = payload + ("=" * (-len(payload) % 4))
+    try:
+        raw = base64.b64decode(padded.encode("utf-8"))
+        obj = json.loads(raw.decode("utf-8"))
+        if not isinstance(obj, dict):
+            return link
+        if any(str(k).lower() == "deviceid" for k in obj.keys()):
+            return link
+        obj["deviceID"] = device_id
+        encoded = base64.b64encode(
+            json.dumps(obj, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        ).decode("utf-8")
+        return "vmess://" + encoded.rstrip("=")
+    except Exception:
+        return link
+
+
+def _inject_device_id_into_link(link: str, device_id: str) -> str:
+    if not link or "://" not in link:
+        return link
+    if link.startswith("vmess://"):
+        return _inject_device_id_into_vmess(link, device_id)
+    if link.startswith("v2box://"):
+        return link
+    try:
+        parts = urlsplit(link)
+        if not parts.scheme:
+            return link
+        query_items = parse_qsl(parts.query, keep_blank_values=True)
+        if any(k.lower() == "deviceid" for k, _ in query_items):
+            return link
+        query_items.append(("deviceID", device_id))
+        new_query = urlencode(query_items, doseq=True)
+        return urlunsplit((parts.scheme, parts.netloc, parts.path, new_query, parts.fragment))
+    except Exception:
+        return link
+
+
+def _apply_v2box_device_id(config: str, device_id: str) -> str:
+    if not config or not device_id:
+        return config
+    device_id = _v2box_device_id_case(device_id)
+    if not device_id:
+        return config
+    lines = []
+    for line in config.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            lines.append(line)
+            continue
+        lines.append(_inject_device_id_into_link(stripped, device_id))
+    return "\n".join(lines)
+
 
 
 def _xpert_allowed_for_user(extra_data: dict) -> bool:
@@ -59,7 +127,7 @@ def _xpert_allowed_for_user(extra_data: dict) -> bool:
         return False
 
     expire = extra_data.get("expire")
-    # `expire` of 0 means unlimited in Marzban/Xpert and should stay allowed.
+    # `expire` of 0 means unlimited in Xpert/Xpert and should stay allowed.
     if expire is not None and expire > 0:
         now_ts = int(dt.utcnow().timestamp())
         if expire <= now_ts:
@@ -313,9 +381,9 @@ def generate_v2ray_links(proxies: dict, inbounds: dict, extra_data: dict, revers
     if expire is not None and expire > 0 and expire <= 0:
         hide_external_servers = True
     
-    # Добавляем обычные конфиги Marzban (только если не скрыты)
+    # Добавляем обычные конфиги Xpert (только если не скрыты)
     if not hide_external_servers:
-        marzban_links = process_inbounds_and_tags(inbounds, proxies, format_variables, conf=conf, reverse=reverse)
+        xpert_links = process_inbounds_and_tags(inbounds, proxies, format_variables, conf=conf, reverse=reverse)
     else:
         # Если пользователь неактивен, добавляем только заглушку или пусто
         pass
@@ -325,10 +393,10 @@ def generate_v2ray_links(proxies: dict, inbounds: dict, extra_data: dict, revers
         from app.xpert.service import xpert_service
         from app.xpert.cluster_service import whitelist_service
         from app.xpert.ip_filter import host_filter
-        from app.xpert.marzban_integration import marzban_integration
+        from app.xpert.xpert_integration import xpert_integration
         
-        # Автоматическая синхронизация с Marzban при генерации подписки
-        # Это гарантирует что Xpert конфиги всегда доступны в Marzban
+        # Автоматическая синхронизация с Xpert при генерации подписки
+        # Это гарантирует что Xpert конфиги всегда доступны в Xpert
         try:
             # Проверяем нужно ли синхронизировать (раз в час)
             import time
@@ -338,8 +406,8 @@ def generate_v2ray_links(proxies: dict, inbounds: dict, extra_data: dict, revers
             last_sync_time = getattr(xpert_service, '_last_sync_time', 0)
             
             if current_time - last_sync_time > 3600:  # 1 час
-                logger.info("Auto-syncing Xpert configs to Marzban during subscription generation")
-                marzban_integration.sync_active_configs_to_marzban()
+                logger.info("Auto-syncing Xpert configs to Xpert during subscription generation")
+                xpert_integration.sync_active_configs_to_xpert()
                 xpert_service._last_sync_time = current_time
         except Exception as sync_error:
             logger.warning(f"Auto-sync failed: {sync_error}")
@@ -402,15 +470,15 @@ def generate_clash_subscription(
 
     format_variables = setup_format_variables(extra_data)
     
-    # Добавляем обычные конфиги Marzban
-    marzban_config = process_inbounds_and_tags(
+    # Добавляем обычные конфиги Xpert
+    xpert_config = process_inbounds_and_tags(
         inbounds, proxies, format_variables, conf=conf, reverse=reverse
     )
     
     # Добавляем конфиги из Xpert Panel (только для v2ray формата, clash требует специальной конвертации)
     # Пока пропускаем для clash, так как нужна конвертация в yaml формат
     
-    return marzban_config
+    return xpert_config
 
 
 def generate_singbox_subscription(
@@ -451,6 +519,7 @@ def generate_subscription(
         config_format: Literal["v2ray", "clash-meta", "clash", "sing-box", "outline", "v2ray-json"],
         as_base64: bool,
         reverse: bool,
+        v2box_device_id: str | None = None,
 ) -> str:
     kwargs = {
         "proxies": user.proxies,
@@ -502,6 +571,9 @@ def generate_subscription(
                         config = (config.rstrip("\n") + "\n" + suffix.lstrip("\n")).rstrip("\n") + "\n"
         except Exception as e:
             logger.error(f"Failed to append remote panel links: {e}")
+
+        if v2box_device_id:
+            config = _apply_v2box_device_id(config, v2box_device_id)
 
     if as_base64:
         config = base64.b64encode(config.encode()).decode()

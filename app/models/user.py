@@ -1,6 +1,6 @@
 import re
 import secrets
-from urllib.parse import quote_plus
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from datetime import datetime
 from enum import Enum
 from typing import Dict, List, Optional, Union
@@ -11,7 +11,10 @@ from app import xray
 from app.models.admin import Admin
 from app.models.proxy import ProxySettings, ProxyTypes
 from app.subscription.share import generate_v2ray_links
+from app.utils.features import feature_enabled
 from app.utils.jwt import create_subscription_token
+from app.xpert.happ_crypto_auto_service import get_cached_or_create_happ_crypto_link
+from app.xpert.hwid_lock_service import has_hwid_protection
 from app.xpert.v2box_hwid_service import get_required_v2box_device_id_for_username
 from config import XRAY_SUBSCRIPTION_PATH, XRAY_SUBSCRIPTION_URL_PREFIX
 
@@ -315,16 +318,31 @@ class UserResponse(User):
         if self.subscription_url and not self.subscription_url.endswith("/v2ray"):
             self.subscription_url = self.subscription_url.rstrip("/") + "/v2ray"
 
-        # V2Box mode: if explicit device_id exists, embed it in subscription query.
+        # Keep all optional query flags in one place to avoid duplicated/invalid URLs.
         try:
-            req_id = get_required_v2box_device_id_for_username(self.username)
-            if req_id:
-                encoded = quote_plus(req_id)
-                if "?" in self.subscription_url:
-                    if "v2box_id=" not in self.subscription_url:
-                        self.subscription_url = self.subscription_url + f"&v2box_id={encoded}"
-                else:
-                    self.subscription_url = self.subscription_url + f"?v2box_id={encoded}"
+            parts = urlsplit(self.subscription_url)
+            query = dict(parse_qsl(parts.query, keep_blank_values=True))
+
+            # V2Box mode: if explicit device_id exists, embed it in subscription query.
+            if feature_enabled("v2box_id"):
+                req_id = get_required_v2box_device_id_for_username(self.username)
+                if req_id and not query.get("v2box_id"):
+                    query["v2box_id"] = req_id
+
+            # Happ lock mode: hide edit/share/QR/JSON actions inside Happ UI.
+            if feature_enabled("happ_crypto") and has_hwid_protection(self.username) and not query.get("hide-settings"):
+                query["hide-settings"] = "true"
+
+            self.subscription_url = urlunsplit(
+                (parts.scheme, parts.netloc, parts.path, urlencode(query, doseq=True), parts.fragment)
+            )
+
+            # Full "locked" behavior in Happ is tied to crypto-link mode.
+            # `hide-settings=true` alone is not always enough on its own.
+            if feature_enabled("happ_crypto") and has_hwid_protection(self.username):
+                locked_link = get_cached_or_create_happ_crypto_link(self.username, self.subscription_url)
+                if locked_link:
+                    self.subscription_url = locked_link
         except Exception:
             pass
         return self

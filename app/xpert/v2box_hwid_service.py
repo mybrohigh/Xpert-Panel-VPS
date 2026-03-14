@@ -109,13 +109,17 @@ def clear_v2box_for_username(username: str) -> bool:
     return had
 
 
-def _extract_device_id(headers: dict, query_params: Optional[dict] = None) -> str:
-    # Prefer client headers, but keep query fallback for V2Box builds that only send query params.
+def _extract_device_id(
+    headers: dict,
+    query_params: Optional[dict] = None,
+    allow_query: bool = False,
+) -> str:
+    # Prefer client headers. Query params are allowed only when explicitly enabled.
     for key in ("x-device-id", "x-hwid", "x-install-id", "x-app-instance-id"):
         v = headers.get(key)
         if v and str(v).strip():
             return str(v).strip()
-    if query_params:
+    if allow_query and query_params:
         for key in ("v2box_id", "v2box_hwid", "device_id", "hwid"):
             v = query_params.get(key)
             if v and str(v).strip():
@@ -138,10 +142,13 @@ def check_and_register_v2box_for_username(username: str, headers: dict, query_pa
         entry = users.get(username) or {}
 
         required_id = _normalize_device_id(entry.get("required_device_id") or entry.get("required_hwid"))
+        # Legacy behavior: only enforce when required_id is configured.
         if not required_id:
             return True
 
-        device_id = _normalize_device_id(_extract_device_id(headers, query_params))
+        # Strict mode: accept device-id only from headers (prevents URL reuse).
+        device_id = _normalize_device_id(_extract_device_id(headers, query_params, allow_query=False))
+
         if not device_id:
             return False
         if device_id != required_id:

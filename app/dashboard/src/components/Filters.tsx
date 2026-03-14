@@ -25,6 +25,7 @@ import debounce from "lodash.debounce";
 import React, { FC, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { fetch } from "service/http";
+import { useFeatures } from "hooks/useFeatures";
 
 const iconProps = {
   baseStyle: {
@@ -55,6 +56,7 @@ export const Filters: FC<FilterProps> = ({ ...props }) => {
   const { loading, filters, onFilterChange, refetchUsers, onCreateUser } =
     useDashboard();
   const { t } = useTranslation();
+  const { hasFeature } = useFeatures();
   const [search, setSearch] = useState("");
   const [admins, setAdmins] = useState<AdminItem[]>([]);
   const [me, setMe] = useState<AdminItem | null>(null);
@@ -128,9 +130,10 @@ export const Filters: FC<FilterProps> = ({ ...props }) => {
     });
   };
 
+  const canUseAdminFilter = hasFeature("admin_filter");
   const selectedValue =
     filters.admin === me?.username ? "__sudo_self__" : filters.admin || "__all__";
-  const desktopFilterColumns = me?.is_sudo
+  const desktopFilterColumns = me?.is_sudo && canUseAdminFilter
     ? "minmax(0, 1fr) minmax(0, 1fr)"
     : "1fr";
 
@@ -205,7 +208,7 @@ export const Filters: FC<FilterProps> = ({ ...props }) => {
             </InputRightElement>
           </InputGroup>
 
-          {me?.is_sudo ? (
+          {me?.is_sudo && canUseAdminFilter ? (
             <Select
               className="admin-filter-select"
               size="md"

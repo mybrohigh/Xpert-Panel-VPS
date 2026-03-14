@@ -916,7 +916,24 @@ def get_jwt_secret_key(db: Session) -> str:
     Returns:
         str: JWT secret key.
     """
-    return db.query(JWT).first().secret_key
+    jwt_record = db.query(JWT).first()
+    if not jwt_record:
+        # Create JWT secret if it doesn't exist
+        import os
+        import logging
+        logger = logging.getLogger("uvicorn.error")
+        secret_key = os.urandom(32).hex()
+        try:
+            new_jwt = JWT(secret_key=secret_key)
+            db.add(new_jwt)
+            db.commit()
+            logger.info("Created new JWT secret key")
+            return secret_key
+        except Exception as e:
+            logger.error(f"Failed to create JWT secret key: {e}")
+            db.rollback()
+            raise ValueError("Failed to initialize JWT secret key")
+    return jwt_record.secret_key
 
 
 def get_tls_certificate(db: Session) -> TLS:
@@ -1036,7 +1053,7 @@ def partial_update_admin(db: Session, dbadmin: Admin, modified_admin: AdminParti
 
 def remove_admin(db: Session, dbadmin: Admin) -> Admin:
     """
-    Removes an admin from the database.
+    Removes an admin from the database, handling all FK dependencies first.
 
     Args:
         db (Session): Database session.
@@ -1045,6 +1062,20 @@ def remove_admin(db: Session, dbadmin: Admin) -> Admin:
     Returns:
         Admin: The removed admin object.
     """
+    # 1. Delete admin usage logs
+    db.query(AdminUsageLogs).filter(AdminUsageLogs.admin_id == dbadmin.id).delete()
+
+    # 2. Nullify admin_id in action logs (preserve logs for audit)
+    db.query(AdminActionLog).filter(AdminActionLog.admin_id == dbadmin.id).update(
+        {AdminActionLog.admin_id: None}, synchronize_session=False
+    )
+
+    # 3. Nullify admin_id for users created by this admin
+    db.query(User).filter(User.admin_id == dbadmin.id).update(
+        {User.admin_id: None}, synchronize_session=False
+    )
+
+    # 4. Delete the admin
     db.delete(dbadmin)
     db.commit()
     return dbadmin

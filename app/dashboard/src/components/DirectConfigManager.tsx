@@ -69,7 +69,7 @@ interface DirectConfig {
   is_active: boolean;
   is_permanent: boolean;
   bypass_whitelist: boolean;
-  auto_sync_to_marzban: boolean;
+  auto_sync_to_core: boolean;
   added_at: string;
   added_by: string;
 }
@@ -372,7 +372,7 @@ export const DirectConfigManager: FC = () => {
       
       toast({
         title: "Direct config added",
-        description: "Configuration added successfully and synced to Marzban",
+        description: "Configuration added successfully and synced to Xpert Core",
         status: "success",
         duration: 3000,
       });
@@ -577,20 +577,20 @@ export const DirectConfigManager: FC = () => {
     }
   };
 
-  const handleSyncToMarzban = async (id: number) => {
+  const handleSyncToCore = async (id: number) => {
     try {
-      await fetch(`/api/xpert/direct-configs/${id}/sync-to-marzban`, {
+      await fetch(`/api/xpert/direct-configs/${id}/sync-to-core`, {
         method: "POST",
         headers: { Authorization: `Bearer ${getAuthToken()}` },
       });
       toast({
-        title: "Config synced to Marzban",
+        title: "Config synced to Xpert Core",
         status: "success",
         duration: 3000,
       });
     } catch (error) {
       toast({
-        title: "Error syncing to Marzban",
+        title: "Error syncing to Xpert Core",
         status: "error",
         duration: 3000,
       });
@@ -1049,12 +1049,12 @@ export const DirectConfigManager: FC = () => {
                     onClick={() => openEditModal(config)}
                   />
                   <IconButton
-                    aria-label="Sync to Marzban"
+                    aria-label="Sync to Xpert Core"
                     icon={<RepeatIcon />}
                     size="xs"
                     colorScheme="purple"
                     variant="ghost"
-                    onClick={() => handleSyncToMarzban(config.id)}
+                    onClick={() => handleSyncToCore(config.id)}
                   />
                   <IconButton
                     aria-label="Delete"
@@ -1186,12 +1186,12 @@ export const DirectConfigManager: FC = () => {
                           onClick={() => openEditModal(config)}
                         />
                         <IconButton
-                          aria-label="Sync to Marzban"
+                          aria-label="Sync to Xpert Core"
                           icon={<RepeatIcon />}
                           size="sm"
                           colorScheme="purple"
                           variant="outline"
-                          onClick={() => handleSyncToMarzban(config.id)}
+                          onClick={() => handleSyncToCore(config.id)}
                         />
                         <IconButton
                           aria-label="Delete"

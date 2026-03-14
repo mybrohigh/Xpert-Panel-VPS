@@ -13,7 +13,8 @@ _storage_lock = threading.Lock()
 
 
 def normalize_hwid(hwid: str) -> str:
-    return (hwid or '').strip()
+    # Normalize to lowercase so UUID-like device IDs match across client variants.
+    return (hwid or '').strip().lower()
 
 
 def _load_data() -> dict:
@@ -162,6 +163,64 @@ def get_required_hwid_for_username(username: str) -> Optional[str]:
     return hwid or None
 
 
+def get_hwid_limit_for_username(username: str) -> Optional[int]:
+    if not username:
+        return None
+    with _storage_lock:
+        data = _load_data()
+        item = _normalize_entry(data.get('locks', {}).get(username))
+    max_unique = item.get("max_unique_hwid")
+    try:
+        max_unique = int(max_unique) if max_unique is not None else None
+    except Exception:
+        max_unique = None
+    if max_unique is not None and not (1 <= max_unique <= 5):
+        max_unique = None
+    return max_unique
+
+
+def has_hwid_protection(username: str) -> bool:
+    return bool(get_required_hwid_for_username(username) or get_hwid_limit_for_username(username) is not None)
+
+
+def set_required_hwid_for_username(username: str, hwid: str) -> dict:
+    username = (username or "").strip()
+    hwid_norm = normalize_hwid(hwid)
+    if not username:
+        return {"username": "", "required_hwid": None, "max_unique_hwid": None}
+
+    with _storage_lock:
+        data = _load_data()
+        locks = data.get("locks", {})
+        entry = _normalize_entry(locks.get(username, {}))
+
+        if not hwid_norm:
+            entry.pop("hwid", None)
+        else:
+            entry["hwid"] = hwid_norm
+            seen = entry.get("seen_hwids") or []
+            if hwid_norm not in seen:
+                seen.append(hwid_norm)
+            entry["seen_hwids"] = seen
+
+        # Keep entry only if there is still active protection.
+        if not entry.get("hwid") and entry.get("max_unique_hwid") is None:
+            locks.pop(username, None)
+            data["locks"] = locks
+            _save_data(data)
+            return {"username": username, "required_hwid": None, "max_unique_hwid": None}
+
+        entry["updated_at"] = datetime.utcnow().isoformat()
+        locks[username] = entry
+        data["locks"] = locks
+        _save_data(data)
+        return {
+            "username": username,
+            "required_hwid": normalize_hwid(entry.get("hwid", "")) or None,
+            "max_unique_hwid": entry.get("max_unique_hwid"),
+        }
+
+
 def check_and_register_hwid_for_username(username: str, x_hwid: str) -> bool:
     if not username:
         return True
@@ -185,7 +244,7 @@ def check_and_register_hwid_for_username(username: str, x_hwid: str) -> bool:
         if required and max_unique is None:
             return incoming == required
 
-        # Any mode with limit requires x-hwid header.
+        # Any mode with limit requires a client device id.
         if not incoming:
             return False
 

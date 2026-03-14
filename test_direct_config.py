@@ -20,7 +20,7 @@ async def test_direct_config():
         print(f'Successfully added config: {config.protocol}://{config.server}:{config.port}')
         print(f'Config ID: {config.id}')
         print(f'Bypass whitelist: {config.bypass_whitelist}')
-        print(f'Auto sync to Marzban: {config.auto_sync_to_marzban}')
+        print(f'Auto sync to Xpert Core: {config.auto_sync_to_core}')
         
         # Проверка получения всех конфигов
         all_configs = direct_config_service.get_all_configs()

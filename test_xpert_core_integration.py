@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Тестирование интеграции системы мониторинга трафика с Marzban
+Тестирование интеграции системы мониторинга трафика с Xpert Core
 """
 
 import sys
@@ -15,7 +15,7 @@ from app.xpert.traffic_service import traffic_service
 
 def test_admin_integration():
     """Тестирование функций интеграции с админами"""
-    print("🔧 Testing Marzban Integration...")
+    print("🔧 Testing Xpert Core Integration...")
     
     # Тест записи трафика для разных пользователей
     test_users = [
@@ -139,25 +139,25 @@ def test_combined_scenarios():
 
 def print_integration_examples():
     """Примеры использования интеграции"""
-    print("\n📚 Marzban Integration Examples:")
+    print("\n📚 Xpert Core Integration Examples:")
     print("=" * 50)
     
-    print("\n1. 🔄 Сброс всего трафика (Marzban + внешний):")
+    print("\n1. 🔄 Сброс всего трафика (Xpert Core + внешний):")
     print("   POST /api/admin/usage/reset/admin1")
-    print("   - Сбрасывает users_usage в Marzban")
+    print("   - Сбрасывает users_usage в Xpert Core")
     print("   - Сбрасывает внешний трафик в Xpert Panel")
     
     print("\n2. 📊 Получение общего использования:")
     print("   GET /api/admin/usage/admin1")
-    print("   - Возвращает: Marzban_usage + External_traffic (в байтах)")
+    print("   - Возвращает: Xpert Core usage + External_traffic (в байтах)")
     
     print("\n3. 📈 Детальная статистика:")
     print("   GET /api/admin/usage/admin1/detailed")
     print("   Returns:")
     detailed_example = """   {
        "username": "admin1",
-       "marzban_usage_bytes": 1073741824,
-       "marzban_usage_gb": 1.000,
+       "xpert_usage_bytes": 1073741824,
+       "xpert_usage_gb": 1.000,
        "external_traffic": {
            "external_traffic_gb": 2.456,
            "external_unique_users": 15,
@@ -176,7 +176,7 @@ def print_integration_examples():
     print("\n4. 🗑️ Сброс только внешнего трафика:")
     print("   POST /api/admin/external-traffic/reset/admin1")
     print("   - Сбрасывает только внешний трафик")
-    print("   - Не затрагивает Marzban users_usage")
+    print("   - Не затрагивает Xpert Core users_usage")
     
     print("\n5. 📊 Статистика только внешнего трафика:")
     print("   GET /api/admin/external-traffic/stats/admin1?days=30")
@@ -196,7 +196,7 @@ def print_integration_examples():
     print(external_example)
     
     print("\n6. 🎯 Проверка лимитов в UI:")
-    limit_ui_example = """   Marzban UI может использовать:
+    limit_ui_example = """   Xpert UI может использовать:
    - Кнопка "Сбросить трафик" → /api/admin/usage/reset/{username}
    - Кнопка "Лимит трафика" → traffic_limit в админах
    - Индикатор использования → total_usage с учетом внешнего трафика
@@ -211,7 +211,7 @@ def print_api_summary():
     
     endpoints = [
         ("POST /api/admin/usage/reset/{username}", "Сброс всего трафика"),
-        ("GET /api/admin/usage/{username}", "Общее использование (Marzban + внешний)"),
+        ("GET /api/admin/usage/{username}", "Общее использование (Xpert Core + внешний)"),
         ("GET /api/admin/usage/{username}/detailed", "Детальная статистика"),
         ("POST /api/admin/external-traffic/reset/{username}", "Сброс только внешнего трафика"),
         ("GET /api/admin/external-traffic/stats/{username}", "Статистика внешнего трафика")
@@ -223,7 +223,7 @@ def print_api_summary():
 
 def main():
     """Основная функция тестирования"""
-    print("🚀 Marzban Integration Test Suite")
+    print("🚀 Xpert Core Integration Test Suite")
     print("=" * 40)
     
     # Тестирование базовой интеграции
@@ -249,10 +249,10 @@ def main():
     print(f"Combined Scenarios: {'✅ PASS' if combined_ok else '❌ FAIL'}")
     
     if integration_ok and reset_ok and combined_ok:
-        print("\n🎉 All tests passed! Marzban integration ready!")
+        print("\n🎉 All tests passed! Xpert Core integration ready!")
         print("\n📝 Next steps:")
         print("1. 🔄 Перезапустите Xpert Panel")
-        print("2. 🖥️  Откройте Marzban UI")
+        print("2. 🖥️  Откройте Xpert UI")
         print("3. 🎯 Протестируйте кнопки 'Сбросить трафик' и 'Лимит трафика'")
         print("4. 📊 Проверьте что внешний трафик учитывается")
         print("5. ✅ Убедитесь что лимиты работают корректно")

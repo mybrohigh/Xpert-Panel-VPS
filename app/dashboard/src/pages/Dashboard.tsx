@@ -18,8 +18,10 @@ import { UsersTable } from "components/UsersTable";
 import { fetchInbounds, useDashboard } from "contexts/DashboardContext";
 import { FC, useEffect } from "react";
 import { Statistics } from "../components/Statistics";
+import { useFeatures } from "hooks/useFeatures";
 
 export const Dashboard: FC = () => {
+  const { hasFeature } = useFeatures();
   useEffect(() => {
     // Добавляем небольшую задержку чтобы убедиться что все компоненты готовы
     const timer = setTimeout(() => {
@@ -50,9 +52,9 @@ export const Dashboard: FC = () => {
         <NodesDialog />
         <NodesUsage />
         <ResetAllUsageModal />
-        <AdminLimitsModal />
+        {hasFeature("admin_limits") && <AdminLimitsModal />}
         <CoreSettingsModal />
-        <CryptoLinkModal />
+        {hasFeature("happ_crypto") && <CryptoLinkModal />}
       </Box>
       <Footer />
     </VStack>

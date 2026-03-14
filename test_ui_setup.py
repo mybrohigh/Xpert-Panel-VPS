@@ -14,10 +14,10 @@ def test_ui_files():
     print("🎨 Testing UI Files...")
     
     files_to_check = [
-        "/opt/xpert_panel/app/dashboard/src/components/TrafficManager.tsx",
-        "/opt/xpert_panel/app/dashboard/src/pages/TrafficPage.tsx",
-        "/opt/xpert_panel/app/dashboard/src/pages/Router.tsx",
-        "/opt/xpert_panel/app/dashboard/src/components/Header.tsx"
+        "/opt/xpert/app/dashboard/src/components/TrafficManager.tsx",
+        "/opt/xpert/app/dashboard/src/pages/TrafficPage.tsx",
+        "/opt/xpert/app/dashboard/src/pages/Router.tsx",
+        "/opt/xpert/app/dashboard/src/components/Header.tsx"
     ]
     
     all_exist = True
@@ -61,7 +61,7 @@ def test_router_config():
     """Проверяем конфигурацию роутера"""
     print("\n🛣️ Testing Router Configuration...")
     
-    router_file = "/opt/xpert_panel/app/dashboard/src/pages/Router.tsx"
+    router_file = "/opt/xpert/app/dashboard/src/pages/Router.tsx"
     
     if not os.path.exists(router_file):
         print("❌ Router.tsx not found")
@@ -88,7 +88,7 @@ def test_header_config():
     """Проверяем конфигурацию Header"""
     print("\n📱 Testing Header Configuration...")
     
-    header_file = "/opt/xpert_panel/app/dashboard/src/components/Header.tsx"
+    header_file = "/opt/xpert/app/dashboard/src/components/Header.tsx"
     
     if not os.path.exists(header_file):
         print("❌ Header.tsx not found")
@@ -149,7 +149,7 @@ def print_ui_summary():
     
     print("\n⚙️ API эндпоинты для UI:")
     endpoints = [
-        "GET /api/xpert/marzban-traffic-stats",
+        "GET /api/xpert/core-traffic-stats",
         "GET /api/xpert/traffic-stats/database/info", 
         "GET /api/xpert/traffic-stats/{user_token}",
         "POST /api/xpert/traffic-stats/cleanup"
@@ -199,7 +199,7 @@ def main():
     
     print("\n📚 Documentation:")
     print("   • TRAFFIC_MONITORING_GUIDE.md")
-    print("   • MARZBAN_INTEGRATION_GUIDE.md")
+    print("   • CORE_INTEGRATION_GUIDE.md")
 
 
 if __name__ == "__main__":

@@ -4,14 +4,21 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.exc import IntegrityError
 
-from app import xray
+from app import logger, xray
 from app.db import Session, crud, get_db
 from app.dependencies import get_admin_by_username, validate_admin
 from app.models.admin import Admin, AdminCreate, AdminModify, Token
+from app.models.install_otp import InstallOtpCreate, InstallOtpResponse
 from app.utils import report, responses
 from app.utils.jwt import create_admin_token
 from app.xpert.panel_sync_service import panel_sync_service
 from config import LOGIN_NOTIFY_WHITE_LIST
+from app.utils.login_security import (
+    captcha_configured,
+    get_captcha_public_config,
+    login_attempts,
+    verify_captcha,
+)
 
 router = APIRouter(tags=["Admin"], prefix="/api", responses={401: responses._401})
 
@@ -26,28 +33,137 @@ def get_client_ip(request: Request) -> str:
     return "Unknown"
 
 
+async def _get_captcha_token(request: Request) -> str:
+    try:
+        form = await request.form()
+        return str(form.get("captcha_token") or "")
+    except Exception:
+        return ""
+
+
+def _raise_login_error(detail: str, username: str, client_ip: str) -> None:
+    payload = {"detail": detail}
+    if captcha_configured() and login_attempts.is_captcha_required(username, client_ip):
+        payload.update(get_captcha_public_config())
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail=payload,
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+
 @router.post("/admin/token", response_model=Token)
-def admin_token(
+async def admin_token(
     request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db),
 ):
     """Authenticate an admin and issue a token."""
     client_ip = get_client_ip(request)
+    username = form_data.username or ""
 
-    dbadmin = validate_admin(db, form_data.username, form_data.password)
+    if captcha_configured() and login_attempts.is_captcha_required(username, client_ip):
+        captcha_token = await _get_captcha_token(request)
+        if not verify_captcha(captcha_token, client_ip):
+            login_attempts.record_failure(username, client_ip)
+            payload = {"detail": "Captcha required"}
+            payload.update(get_captcha_public_config())
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=payload)
+
+    dbadmin = validate_admin(db, username, form_data.password)
     if not dbadmin:
-        report.login(form_data.username, form_data.password, client_ip, False)
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        report.login(username, form_data.password, client_ip, False)
+        login_attempts.record_failure(username, client_ip)
+        _raise_login_error("Incorrect username or password", username, client_ip)
+
+    login_attempts.record_success(username, client_ip)
 
     if client_ip not in LOGIN_NOTIFY_WHITE_LIST:
-        report.login(form_data.username, "🔒", client_ip, True)
+        report.login(username, "🔒", client_ip, True)
 
-    return Token(access_token=create_admin_token(form_data.username, dbadmin.is_sudo))
+    return Token(access_token=create_admin_token(username, dbadmin.is_sudo))
+
+
+@router.get(
+    "/admin/install-otp",
+    response_model=List[InstallOtpResponse],
+    responses={403: responses._403},
+)
+def list_install_otps(
+    limit: Optional[int] = None,
+    db: Session = Depends(get_db),
+    admin: Admin = Depends(Admin.check_sudo_admin),
+):
+    """List recent installation OTPs."""
+    return crud.list_install_otps(db, limit=limit or 25)
+
+
+@router.post(
+    "/admin/install-otp",
+    response_model=InstallOtpResponse,
+    responses={403: responses._403},
+)
+def create_install_otp(
+    payload: InstallOtpCreate,
+    db: Session = Depends(get_db),
+    admin: Admin = Depends(Admin.check_sudo_admin),
+):
+    """Generate a one-time OTP for installations."""
+    item = crud.create_install_otp(
+        db=db,
+        admin=admin,
+        expires_in_minutes=payload.expires_in_minutes or 30,
+        product=payload.product,
+        edition=payload.edition,
+        bound_ip=payload.bound_ip,
+        note=payload.note,
+    )
+    try:
+        crud.create_admin_action_log(
+            db=db,
+            admin=admin,
+            action="license.install_otp_create",
+            target_type="system",
+            target_username=None,
+            meta={
+                "otp_id": item.id,
+                "expires_at": item.expires_at.isoformat(),
+                "product": getattr(item, "product", None),
+                "edition": getattr(item, "edition", None),
+                "bound_ip": getattr(item, "bound_ip", None),
+            },
+        )
+    except Exception:
+        pass
+    return item
+
+
+@router.delete(
+    "/admin/install-otp/{otp_id}",
+    response_model=InstallOtpResponse,
+    responses={403: responses._403, 404: responses._404},
+)
+def delete_install_otp(
+    otp_id: int,
+    db: Session = Depends(get_db),
+    admin: Admin = Depends(Admin.check_sudo_admin),
+):
+    """Delete an installation OTP by id."""
+    item = crud.delete_install_otp(db, otp_id)
+    if not item:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="OTP not found")
+    try:
+        crud.create_admin_action_log(
+            db=db,
+            admin=admin,
+            action="license.install_otp_delete",
+            target_type="system",
+            target_username=None,
+            meta={"otp_id": otp_id},
+        )
+    except Exception:
+        pass
+    return item
 
 
 @router.post(
@@ -85,7 +201,7 @@ def modify_admin(
     if (dbadmin.username != current_admin.username) and dbadmin.is_sudo:
         raise HTTPException(
             status_code=403,
-            detail="You're not allowed to edit another sudoer's account. Use marzban-cli instead.",
+            detail="You're not allowed to edit another sudoer's account. Use xpert-cli instead.",
         )
 
     old_traffic_limit = dbadmin.traffic_limit
@@ -144,7 +260,7 @@ def remove_admin(
     if dbadmin.is_sudo:
         raise HTTPException(
             status_code=403,
-            detail="You're not allowed to delete sudo accounts. Use marzban-cli instead.",
+            detail="You're not allowed to delete sudo accounts. Use xpert-cli instead.",
         )
 
     crud.remove_admin(db, dbadmin)
@@ -222,7 +338,7 @@ def reset_admin_usage(
     current_admin: Admin = Depends(Admin.check_sudo_admin)
 ):
     """Resets usage of admin including external traffic."""
-    # Сброс стандартного трафика Marzban
+    # Сброс стандартного трафика Xpert
     result = crud.reset_admin_usage(db, dbadmin)
     
     # Сброс внешнего трафика через Xpert
@@ -249,8 +365,8 @@ def get_admin_usage(
     current_admin: Admin = Depends(Admin.check_sudo_admin)
 ):
     """Retrieve the usage of given admin including external traffic."""
-    # Базовое использование Marzban
-    marzban_usage = dbadmin.users_usage
+    # Базовое использование Xpert
+    xpert_usage = dbadmin.users_usage
     
     # Внешний трафик через Xpert
     external_usage = 0
@@ -259,14 +375,14 @@ def get_admin_usage(
         if XPERT_TRAFFIC_TRACKING_ENABLED:
             from app.xpert.traffic_service import traffic_service
             external_stats = traffic_service.get_admin_traffic_usage(dbadmin.username)
-            # Конвертируем ГБ в байты (стандарт Marzban)
+            # Конвертируем ГБ в байты (стандарт Xpert)
             external_usage = int(external_stats.get("external_traffic_gb", 0) * 1024**3)
             logger.info(f"External traffic for {dbadmin.username}: {external_stats}")
     except Exception as e:
         logger.error(f"Failed to get external traffic: {e}")
     
-    # Общее использование = Marzban + внешний трафик
-    total_usage = marzban_usage + external_usage
+    # Общее использование = Xpert + внешний трафик
+    total_usage = xpert_usage + external_usage
     
     return total_usage
 
@@ -281,8 +397,8 @@ def get_admin_usage_detailed(
     current_admin: Admin = Depends(Admin.check_sudo_admin)
 ):
     """Retrieve detailed usage including external traffic breakdown."""
-    # Базовое использование Marzban
-    marzban_usage = dbadmin.users_usage
+    # Базовое использование Xpert
+    xpert_usage = dbadmin.users_usage
     
     # Внешний трафик через Xpert
     external_stats = {}
@@ -303,10 +419,10 @@ def get_admin_usage_detailed(
     
     return {
         "username": dbadmin.username,
-        "marzban_usage_bytes": marzban_usage,
-        "marzban_usage_gb": round(marzban_usage / (1024**3), 3) if marzban_usage else 0,
+        "xpert_usage_bytes": xpert_usage,
+        "xpert_usage_gb": round(xpert_usage / (1024**3), 3) if xpert_usage else 0,
         "external_traffic": external_stats,
-        "total_usage_bytes": marzban_usage + int(external_stats.get("external_traffic_gb", 0) * 1024**3),
+        "total_usage_bytes": xpert_usage + int(external_stats.get("external_traffic_gb", 0) * 1024**3),
         "traffic_limit_bytes": dbadmin.traffic_limit,
         "traffic_limit_gb": round(dbadmin.traffic_limit / (1024**3), 3) if dbadmin.traffic_limit else None,
         "limit_check": limit_check.get("within_limit", True) if limit_check else None,

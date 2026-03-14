@@ -2,14 +2,14 @@
 
 ## 🎯 Обзор
 
-Система мониторинга трафика позволяет отслеживать использование **внешних VPN серверов** через Xpert Panel с последующей интеграцией в Marzban UI.
+Система мониторинга трафика позволяет отслеживать использование **внешних VPN серверов** через Xpert Panel с последующей интеграцией в Xpert UI.
 
 ## ✅ Возможности
 
 - ✅ **Отслеживание трафика** через чужие сервера (не ваши)
 - ✅ **Статистика в ГБ** по пользователям и серверам
 - ✅ **Webhook система** для приема данных от клиентов
-- ✅ **Интеграция с Marzban UI** через API
+- ✅ **Интеграция с Xpert UI** через API
 - ✅ **Middleware логирование** подписных запросов
 - ✅ **Очистка старых данных** по требованию
 - ✅ **SQLite база** с индексами для быстрой работы
@@ -31,7 +31,7 @@ XPERT_DOMAIN=your-domain.com
 
 ```bash
 # Перезапустите Xpert Panel для загрузки нового middleware
-sudo systemctl restart xpert-panel
+sudo systemctl restart xpert
 # или
 python3 main.py
 ```
@@ -40,7 +40,7 @@ python3 main.py
 
 ```bash
 # Тестирование системы
-cd /opt/xpert_panel
+cd /opt/xpert
 python3 test_traffic_simple.py
 ```
 
@@ -119,11 +119,11 @@ python3 test_traffic_simple.py
 }
 ```
 
-### 🖥️ Интеграция с Marzban UI
+### 🖥️ Интеграция с Xpert UI
 
-**Эндпоинт:** `GET /api/xpert/marzban-traffic-stats?days=30`
+**Эндпоинт:** `GET /api/xpert/xpert-traffic-stats?days=30`
 
-**Ответ (совместимый с Marzban):**
+**Ответ (совместимый с Xpert):**
 ```json
 {
     "users_traffic": {
@@ -134,7 +134,7 @@ python3 test_traffic_simple.py
         "total_protocols": 4,
         "period_days": 30,
         "external_servers": true,
-        "integration_type": "xpert_panel",
+        "integration_type": "xpert",
         "data_source": "traffic_monitoring_system"
     }
 }
@@ -212,12 +212,12 @@ API_BASE="https://your-domain.com/api/xpert"
 curl -s "${API_BASE}/traffic-stats/${USER_TOKEN}?days=7" | jq '.'
 ```
 
-### 3. Интеграция с Marzban UI
+### 3. Интеграция с Xpert UI
 
 ```javascript
-// JavaScript для Marzban UI
+// JavaScript для Xpert UI
 async function fetchExternalTrafficStats() {
-    const response = await fetch('/api/xpert/marzban-traffic-stats?days=30');
+    const response = await fetch('/api/xpert/xpert-traffic-stats?days=30');
     const data = await response.json();
     
     if (data.users_traffic.external_servers) {
@@ -286,7 +286,7 @@ curl -s "https://your-domain.com/api/xpert/traffic-stats/database/info" | jq '.'
 app/xpert/
 ├── traffic_service.py     # Основной сервис статистики
 ├── service.py           # Агрегация подписок
-├── marzban_integration.py  # Интеграция с Marzban
+├── xpert_integration.py  # Интеграция с Xpert
 └── direct_config_service.py # Direct конфигурации
 
 app/routers/
@@ -299,7 +299,7 @@ config.py               # Конфигурационные переменные
 
 ```bash
 # Запуск тестов
-cd /opt/xpert_panel
+cd /opt/xpert
 python3 test_traffic_simple.py
 
 # Тестирование API (требует запущенного сервера)
@@ -340,8 +340,8 @@ python3 test_traffic_system.py
    - Проверьте что клиенты отправляют данные на webhook
    - Проверьте логи Xpert Panel
 
-4. **Интеграция с Marzban не работает**
-   - Проверьте эндпоинт `/api/xpert/marzban-traffic-stats`
+4. **Интеграция с Xpert не работает**
+   - Проверьте эндпоинт `/api/xpert/xpert-traffic-stats`
    - Убедитесь что `external_servers: true`
 
 ## 📞 Поддержка
@@ -350,17 +350,17 @@ python3 test_traffic_system.py
 
 ```bash
 # Просмотр логов Xpert Panel
-sudo journalctl -u xpert-panel -f
+sudo journalctl -u xpert -f
 
 # Или если запущено вручную
-tail -f /var/log/xpert-panel.log
+tail -f /var/log/xpert.log
 ```
 
 ### Отладка
 
 ```bash
 # Проверка конфигурации
-cd /opt/xpert_panel
+cd /opt/xpert
 python3 -c "
 from config import XPERT_TRAFFIC_TRACKING_ENABLED
 print('Traffic tracking enabled:', XPERT_TRAFFIC_TRACKING_ENABLED)
@@ -371,4 +371,4 @@ print('Traffic tracking enabled:', XPERT_TRAFFIC_TRACKING_ENABLED)
 
 **Система мониторинга трафика готова к использованию! 🎉**
 
-Теперь вы можете отслеживать использование трафика через внешние VPN серверы и отображать статистику в Marzban UI.
+Теперь вы можете отслеживать использование трафика через внешние VPN серверы и отображать статистику в Xpert UI.

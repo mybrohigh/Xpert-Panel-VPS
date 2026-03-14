@@ -2,9 +2,9 @@ import { createHashRouter, redirect } from "react-router-dom";
 import { fetch } from "../service/http";
 import { getAuthToken } from "../utils/authStorage";
 import { Dashboard } from "./Dashboard";
-import { XpertPanel } from "./XpertPanel";
 import { AdminManager } from "./AdminManager";
 import { Login } from "./Login";
+import { XpertPanel } from "./XpertPanel";
 
 const fetchAdminLoader = async () => {
     try {
@@ -29,12 +29,23 @@ const fetchAdminLoader = async () => {
     }
 };
 
-const fetchSudoLoader = async () => {
-    const admin = await fetchAdminLoader();
-    if (!admin?.is_sudo) {
+const isXpanelEnabled = (system: any) => {
+    if (system?.xpanel_enabled !== undefined) {
+        return Boolean(system.xpanel_enabled);
+    }
+    const features = Array.isArray(system?.features) ? system.features : [];
+    return features
+        .map((value: unknown) => String(value || "").trim().toLowerCase())
+        .includes("xpanel");
+};
+
+const fetchXpanelLoader = async () => {
+    await fetchAdminLoader();
+    const system = await fetch("/system");
+    if (!isXpanelEnabled(system)) {
         return redirect("/");
     }
-    return admin;
+    return system;
 };
 
 export const router = createHashRouter([
@@ -45,22 +56,16 @@ export const router = createHashRouter([
         loader: fetchAdminLoader,
     },
     {
-        path: "/xpert/",
-        element: <XpertPanel />,
-        errorElement: <Login />,
-        loader: fetchSudoLoader,
-    },
-    {
-        path: "/\u0447\u0437\u0443\u043A\u0435/",
-        element: <XpertPanel />,
-        errorElement: <Login />,
-        loader: fetchSudoLoader,
-    },
-    {
         path: "/admin-manager/",
         element: <AdminManager />,
         errorElement: <Login />,
         loader: fetchAdminLoader,
+    },
+    {
+        path: "/xpert/",
+        element: <XpertPanel />,
+        errorElement: <Login />,
+        loader: fetchXpanelLoader,
     },
     {
         path: "/login/",

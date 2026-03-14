@@ -1,6 +1,6 @@
 """
 Сервис для управления прямыми конфигурациями
-Обход белого списка и прямая синхронизация с Marzban
+Обход белого списка и прямая синхронизация с Xpert Core
 """
 
 import logging
@@ -198,7 +198,7 @@ class DirectConfigService:
                 is_active=result["is_active"],
                 is_permanent=False,
                 bypass_whitelist=True,  # Всегда обходить белый список
-                auto_sync_to_marzban=True,  # Автоматически синхронизировать
+                auto_sync_to_core=True,  # Автоматически синхронизировать
                 added_at=datetime.utcnow().isoformat(),
                 added_by=added_by
             )
@@ -453,7 +453,7 @@ class DirectConfigService:
             "inactive_configs": total - active,
             "protocols": protocols,
             "bypass_whitelist_count": len([c for c in self.configs if c.bypass_whitelist]),
-            "auto_sync_count": len([c for c in self.configs if c.auto_sync_to_marzban])
+            "auto_sync_count": len([c for c in self.configs if c.auto_sync_to_core])
         }
 
 

@@ -1,6 +1,6 @@
 """
-Интеграция Xpert с Marzban
-Автоматическое добавление проверенных конфигураций в Marzban
+Интеграция Xpert с Xpert Core
+Автоматическое добавление проверенных конфигураций в Xpert Core
 """
 
 import logging
@@ -19,8 +19,8 @@ from app import db
 logger = logging.getLogger(__name__)
 
 
-class MarzbanIntegration:
-    """Сервис интеграции с Marzban"""
+class XpertCoreIntegration:
+    """Сервис интеграции с Xpert Core"""
     
     def __init__(self):
         self.db_session = db.SessionLocal()
@@ -65,7 +65,7 @@ class MarzbanIntegration:
         return f"{protocol}-in-{port}"
     
     def config_to_proxy_host(self, config: AggregatedConfig) -> ProxyHostModify:
-        """Конвертация конфигурации в ProxyHost для Marzban"""
+        """Конвертация конфигурации в ProxyHost для Xpert Core"""
         return ProxyHostModify(
             remark=f"Xpert-{config.protocol.upper()}-{config.server[:15]}",
             address=config.server,  # Это будет хост для inbound
@@ -79,7 +79,7 @@ class MarzbanIntegration:
         )
     
     def direct_config_to_proxy_host(self, config: DirectConfig) -> ProxyHostModify:
-        """Конвертация прямой конфигурации в ProxyHost для Marzban"""
+        """Конвертация прямой конфигурации в ProxyHost для Xpert Core"""
         return ProxyHostModify(
             remark=f"Direct-{config.protocol.upper()}-{config.server[:15]}",
             address=config.server,
@@ -92,8 +92,8 @@ class MarzbanIntegration:
             fingerprint="chrome"
         )
     
-    def sync_active_configs_to_marzban(self) -> Dict:
-        """Синхронизация активных конфигов с Marzban"""
+    def sync_active_configs_to_core(self) -> Dict:
+        """Синхронизация активных конфигов с Xpert Core"""
         try:
             # Получаем активные конфиги
             active_configs = storage.get_active_configs()
@@ -124,7 +124,7 @@ class MarzbanIntegration:
                     logger.error(error_msg)
                     errors.append(error_msg)
             
-            logger.info(f"Marzban sync complete: {synced_count} configs synced")
+            logger.info(f"Xpert Core sync complete: {synced_count} configs synced")
             
             return {
                 "status": "success",
@@ -134,7 +134,7 @@ class MarzbanIntegration:
             }
             
         except Exception as e:
-            logger.error(f"Marzban integration failed: {e}")
+            logger.error(f"Xpert Core integration failed: {e}")
             return {
                 "status": "error",
                 "error": str(e)
@@ -195,7 +195,7 @@ class MarzbanIntegration:
         }
     
     def cleanup_inactive_hosts(self, active_configs: List[AggregatedConfig]) -> Dict:
-        """Очистка неактивных хостов из Marzban"""
+        """Очистка неактивных хостов из Xpert Core"""
         try:
             active_addresses = {config.server for config in active_configs}
             removed_count = 0
@@ -242,10 +242,10 @@ class MarzbanIntegration:
                 "error": str(e)
             }
     
-    def sync_direct_config_to_marzban(self, config: DirectConfig) -> Dict:
-        """Синхронизация прямой конфигурации с Marzban"""
+    def sync_direct_config_to_core(self, config: DirectConfig) -> Dict:
+        """Синхронизация прямой конфигурации с Xpert Core"""
         try:
-            # Direct configs should NOT be converted into Marzban hosts.
+            # Direct configs should NOT be converted into Xpert Core hosts.
             return {
                 "status": "disabled",
                 "reason": "direct_configs_not_synced",
@@ -291,7 +291,7 @@ class MarzbanIntegration:
             except Exception:
                 pass
             
-            logger.info(f"Added direct config to Marzban: {config.protocol}://{config.server}:{config.port}")
+            logger.info(f"Added direct config to Xpert Core: {config.protocol}://{config.server}:{config.port}")
             
             return {
                 "status": "success",
@@ -302,14 +302,14 @@ class MarzbanIntegration:
             }
             
         except Exception as e:
-            logger.error(f"Failed to sync direct config to Marzban: {e}")
+            logger.error(f"Failed to sync direct config to Xpert Core: {e}")
             return {
                 "status": "error",
                 "error": str(e)
             }
     
-    def sync_all_direct_configs_to_marzban(self) -> Dict:
-        """Синхронизация всех активных прямых конфигураций с Marzban"""
+    def sync_all_direct_configs_to_core(self) -> Dict:
+        """Синхронизация всех активных прямых конфигураций с Xpert Core"""
         try:
             from app.xpert.direct_config_service import direct_config_service
             
@@ -324,7 +324,7 @@ class MarzbanIntegration:
             
             for config in active_configs:
                 try:
-                    result = self.sync_direct_config_to_marzban(config)
+                    result = self.sync_direct_config_to_core(config)
                     if result["status"] == "success":
                         synced_count += 1
                     elif result["status"] == "error":
@@ -352,4 +352,4 @@ class MarzbanIntegration:
 
 
 # Глобальный экземпляр интеграции
-marzban_integration = MarzbanIntegration()
+xpert_core_integration = XpertCoreIntegration()

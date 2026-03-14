@@ -126,9 +126,9 @@ def print_usage_examples():
     print("   GET /api/xpert/traffic-stats/global?days=30")
     print("   Returns: total users, servers, GB used, top servers")
     
-    print("\n4. 🖥️ Статистика для Marzban UI:")
-    print("   GET /api/xpert/marzban-traffic-stats?days=30")
-    print("   Returns: Marzban-compatible format with external_servers=true")
+    print("\n4. 🖥️ Статистика для Xpert Core UI:")
+    print("   GET /api/xpert/core-traffic-stats?days=30")
+    print("   Returns: Xpert Core-compatible format with external_servers=true")
     
     print("\n5. 🗂️ Очистка старой статистики:")
     print("   POST /api/xpert/traffic-stats/cleanup?days=90")
@@ -156,7 +156,7 @@ def print_integration_notes():
     print("   • Middleware for subscription request tracking")
     print("   • Webhook API for traffic data collection")
     print("   • User and global statistics")
-    print("   • Marzban UI integration endpoint")
+    print("   • Xpert Core UI integration endpoint")
     print("   • Database cleanup functionality")
     print("   • Configuration-based enable/disable")
     
@@ -171,7 +171,7 @@ def print_integration_notes():
     print("   3. Client sends traffic data to webhook")
     print("   4. Traffic stored in SQLite database")
     print("   5. Statistics available via API")
-    print("   6. Marzban UI can fetch external server stats")
+    print("   6. Xpert Core UI can fetch external server stats")
     
     print("\n⚡ Performance considerations:")
     print("   • Minimal middleware overhead")
@@ -205,7 +205,7 @@ def main():
     print("1. 🔄 Restart Xpert Panel to load new middleware")
     print("2. 🧪 Test subscription URLs with tracking")
     print("3. 📱 Implement client-side webhook calls")
-    print("4. 🖥️ Add traffic stats to Marzban UI")
+    print("4. 🖥️ Add traffic stats to Xpert Core UI")
     print("5. 📊 Monitor external server usage")
 
 

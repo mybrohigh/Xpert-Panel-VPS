@@ -13,6 +13,7 @@ $ [OPTIONS] COMMAND [ARGS]...
 **Commands**:
 
 * `admin`
+* `captcha`
 * `completion`: Generate and install completion scripts.
 * `subscription`
 * `user`
@@ -41,7 +42,7 @@ $ admin [OPTIONS] COMMAND [ARGS]...
 
 Creates an admin
 
-Password can also be set using the `MARZBAN_ADMIN_PASSWORD` environment variable for non-interactive usages.
+Password can also be set using the `XPERT_ADMIN_PASSWORD` environment variable for non-interactive usages.
 
 **Usage**:
 
@@ -128,6 +129,21 @@ $ admin update [OPTIONS]
 **Options**:
 
 * `-u, --username TEXT`: [required]
+* `--help`: Show this message and exit.
+
+## `captcha`
+
+Show the captcha setup menu (Cloudflare Turnstile). Prompts for keys and writes to the env file.
+
+**Usage**:
+
+```console
+$ captcha [OPTIONS]
+```
+
+**Options**:
+
+* `--env TEXT`: Env file path. [default: /opt/xpert/.env]
 * `--help`: Show this message and exit.
 
 ## `completion`

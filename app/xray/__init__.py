@@ -18,6 +18,10 @@ logger = logging.getLogger(__name__)
 
 # Check if Xray is available (optional for subscription aggregation mode)
 XRAY_ENABLED = os.path.exists(XRAY_EXECUTABLE_PATH)
+if XRAY_ENABLED:
+    if not XRAY_JSON or not os.path.exists(XRAY_JSON):
+        logger.warning("Xray config not found - running in subscription aggregation mode only")
+        XRAY_ENABLED = False
 
 if XRAY_ENABLED:
     from xray_api import XRay as XRayAPI
@@ -51,6 +55,8 @@ def hosts(storage: dict):
     from app.db import GetDB, crud
 
     storage.clear()
+    if not config:
+        return
     with GetDB() as db:
         for inbound_tag in config.inbounds_by_tag:
             inbound_hosts: Sequence[ProxyHost] = crud.get_hosts(db, inbound_tag)

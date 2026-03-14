@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field, asdict, fields
 from datetime import datetime
 from typing import List, Optional
 
@@ -102,7 +102,7 @@ class DirectConfig:
     is_active: bool = True
     is_permanent: bool = False
     bypass_whitelist: bool = True  # Всегда обходить белый список
-    auto_sync_to_marzban: bool = True  # Автоматически синхронизировать с Marzban
+    auto_sync_to_core: bool = True  # Автоматически синхронизировать с Xpert Core
     added_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
     added_by: str = "admin"  # Кто добавил конфигурацию
     
@@ -111,4 +111,9 @@ class DirectConfig:
     
     @classmethod
     def from_dict(cls, data: dict):
-        return cls(**data)
+        payload = dict(data or {})
+        if "auto_sync_to_core" not in payload and "auto_sync_to_marzban" in payload:
+            payload["auto_sync_to_core"] = payload.get("auto_sync_to_marzban")
+        allowed = {f.name for f in fields(cls)}
+        cleaned = {k: v for k, v in payload.items() if k in allowed}
+        return cls(**cleaned)
