@@ -446,14 +446,17 @@ class DirectConfigService:
             for config in self.configs:
                 protocol = config.protocol.upper()
                 protocols[protocol] = protocols.get(protocol, 0) + 1
-        
+
+            bypass_count = len([c for c in self.configs if c.bypass_whitelist])
+            sync_count = len([c for c in self.configs if c.auto_sync_to_core])
+
         return {
             "total_configs": total,
             "active_configs": active,
             "inactive_configs": total - active,
             "protocols": protocols,
-            "bypass_whitelist_count": len([c for c in self.configs if c.bypass_whitelist]),
-            "auto_sync_count": len([c for c in self.configs if c.auto_sync_to_core])
+            "bypass_whitelist_count": bypass_count,
+            "auto_sync_count": sync_count
         }
 
 

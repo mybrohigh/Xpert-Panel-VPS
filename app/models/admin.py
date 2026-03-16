@@ -21,34 +21,35 @@ class Token(BaseModel):
 class Admin(BaseModel):
     username: str
     is_sudo: bool
+    is_primary_sudo: bool = False
     telegram_id: Optional[int] = None
     discord_webhook: Optional[str] = None
     users_usage: Optional[int] = None
     traffic_limit: Optional[int] = None
     users_limit: Optional[int] = None
+    subscription_url_prefix: Optional[str] = None
     model_config = ConfigDict(from_attributes=True)
 
     @field_validator("users_usage",  mode='before')
     def cast_to_int(cls, v):
         if v is None:  # Allow None values
             return v
-        if isinstance(v, float):  # Allow float to int conversion
-            return int(v)
-        if isinstance(v, int):  # Allow integers directly
-            return v
-        raise ValueError("must be an integer or a float, not a string")  # Reject strings
+        try:
+            return int(float(v))
+        except (ValueError, TypeError):
+            raise ValueError("must be an integer or a float")
 
     @field_validator("traffic_limit", "users_limit", mode="before")
     def cast_limits(cls, v):
         if v is None:
             return v
-        if isinstance(v, float):
-            v = int(v)
-        if isinstance(v, int):
-            if v < 0:
+        try:
+            val = int(float(v))
+            if val < 0:
                 raise ValueError("limit must be zero or a positive integer")
-            return v
-        raise ValueError("limit must be an integer or a float, not a string")
+            return val
+        except (ValueError, TypeError):
+            raise ValueError("limit must be an integer or a float")
 
     @classmethod
     def get_admin(cls, token: str, db: Session):
@@ -57,7 +58,7 @@ class Admin(BaseModel):
             return
 
         if payload['username'] in SUDOERS and payload['is_sudo'] is True:
-            return cls(username=payload['username'], is_sudo=True)
+            return cls(username=payload['username'], is_sudo=True, is_primary_sudo=True)
 
         dbadmin = crud.get_admin(db, payload['username'])
         if not dbadmin:
@@ -69,7 +70,9 @@ class Admin(BaseModel):
             if dbadmin.password_reset_at > payload.get("created_at"):
                 return
 
-        return cls.model_validate(dbadmin)
+        admin = cls.model_validate(dbadmin)
+        admin.is_primary_sudo = False
+        return admin
 
     @classmethod
     def get_current(cls,
@@ -109,6 +112,7 @@ class AdminCreate(Admin):
     discord_webhook: Optional[str] = None
     traffic_limit: Optional[int] = None
     users_limit: Optional[int] = None
+    subscription_url_prefix: Optional[str] = None
 
     @property
     def hashed_password(self):
@@ -129,6 +133,7 @@ class AdminModify(BaseModel):
     discord_webhook: Optional[str] = None
     traffic_limit: Optional[int] = None
     users_limit: Optional[int] = None
+    subscription_url_prefix: Optional[str] = None
 
     @property
     def hashed_password(self):

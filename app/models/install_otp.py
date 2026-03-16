@@ -63,9 +63,15 @@ class InstallOtpCreate(BaseModel):
 
     @model_validator(mode="after")
     def validate_product_edition(self):
-        product = (self.product or "").strip().lower()
+        product = (self.product or _DEFAULT_PRODUCT).strip().lower()
+        if product not in _ALLOWED_PRODUCTS:
+            product = _DEFAULT_PRODUCT
+        self.product = product
+        
         edition = (self.edition or "").strip().lower()
         if product in ("xpert", "marzban_patch"):
+            if not edition:
+                edition = "standard"
             if edition not in _ALLOWED_EDITIONS:
                 raise ValueError("edition must be standard, full, or custom")
             self.edition = edition

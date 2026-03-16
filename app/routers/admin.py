@@ -133,8 +133,8 @@ def create_install_otp(
                 "bound_ip": getattr(item, "bound_ip", None),
             },
         )
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"Failed to create audit log for install_otp_create: {e}")
     return item
 
 
@@ -161,8 +161,8 @@ def delete_install_otp(
             target_username=None,
             meta={"otp_id": otp_id},
         )
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"Failed to create audit log for install_otp_delete: {e}")
     return item
 
 
@@ -241,8 +241,8 @@ def modify_admin(
                     "new": int(updated_admin.users_limit) if updated_admin.users_limit is not None else None,
                 },
             )
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"Failed to create audit log for admin modify: {e}")
 
     return updated_admin
 
@@ -303,8 +303,8 @@ def disable_all_active_users(
             xray.operations.restart_node(node_id, startup_config)
     try:
         panel_sync_service.sync_all_users_from_db(db)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"Panel sync failed after disabling users: {e}")
     return {"detail": "Users successfully disabled"}
 
 
@@ -322,8 +322,8 @@ def activate_all_disabled_users(
             xray.operations.restart_node(node_id, startup_config)
     try:
         panel_sync_service.sync_all_users_from_db(db)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"Panel sync failed after activating users: {e}")
     return {"detail": "Users successfully activated"}
 
 
@@ -366,7 +366,7 @@ def get_admin_usage(
 ):
     """Retrieve the usage of given admin including external traffic."""
     # Базовое использование Xpert
-    xpert_usage = dbadmin.users_usage
+    xpert_usage = dbadmin.users_usage or 0
     
     # Внешний трафик через Xpert
     external_usage = 0
@@ -398,10 +398,11 @@ def get_admin_usage_detailed(
 ):
     """Retrieve detailed usage including external traffic breakdown."""
     # Базовое использование Xpert
-    xpert_usage = dbadmin.users_usage
+    xpert_usage = dbadmin.users_usage or 0
     
     # Внешний трафик через Xpert
     external_stats = {}
+    limit_check = {}
     try:
         from config import XPERT_TRAFFIC_TRACKING_ENABLED
         if XPERT_TRAFFIC_TRACKING_ENABLED:
@@ -409,7 +410,6 @@ def get_admin_usage_detailed(
             external_stats = traffic_service.get_admin_traffic_usage(dbadmin.username)
             
             # Проверка лимита трафика
-            limit_check = {}
             if dbadmin.traffic_limit:
                 limit_check = traffic_service.check_admin_traffic_limit(
                     dbadmin.username, dbadmin.traffic_limit
@@ -453,6 +453,8 @@ def reset_external_traffic_only(
         result = traffic_service.reset_admin_external_traffic(dbadmin.username)
         logger.info(f"External traffic reset for {dbadmin.username}: {result}")
         return result
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Failed to reset external traffic: {e}")
         raise HTTPException(
@@ -497,6 +499,8 @@ def get_external_traffic_stats(
             "traffic_limit_gb": round(dbadmin.traffic_limit / (1024**3), 3) if dbadmin.traffic_limit else None,
             "limit_check": limit_check
         }
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Failed to get external traffic stats: {e}")
         raise HTTPException(

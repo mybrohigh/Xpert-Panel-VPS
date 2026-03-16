@@ -52,6 +52,7 @@ import { TrashIcon, ArrowPathIcon, PlusIcon } from "@heroicons/react/24/outline"
 import { fetch } from "../service/http";
 import { getAuthToken } from "../utils/authStorage";
 import { useFeatures } from "../hooks/useFeatures";
+import useGetUser from "../hooks/useGetUser";
 
 const AddIcon = chakra(PlusIcon, { baseStyle: { w: 4, h: 4 } });
 const RepeatIcon = chakra(ArrowPathIcon, { baseStyle: { w: 4, h: 4 } });
@@ -133,6 +134,7 @@ export const XpertPanel: FC = () => {
   const targetIpsModal = useDisclosure();
   const { hasFeature, isLoading: featuresLoading } = useFeatures();
   const xpanelEnabled = hasFeature("xpanel");
+  const { userData, getUserIsSuccess } = useGetUser();
 
   const loadData = async () => {
     setLoading(true);
@@ -715,8 +717,8 @@ export const XpertPanel: FC = () => {
         </Card>
       </Box>
 
-      {/* Installation OTPs */}
-      <InstallOtpManager />
+      {/* Installation OTPs — only for primary sudo */}
+      {getUserIsSuccess && userData.is_primary_sudo && <InstallOtpManager />}
 
       <Footer />
 

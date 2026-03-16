@@ -763,7 +763,7 @@ def reset_user_data_usage(db: Session, dbuser: User) -> User:
 
     dbuser.used_traffic = 0
     dbuser.node_usages.clear()
-    if dbuser.status not in (UserStatus.expired or UserStatus.disabled):
+    if dbuser.status not in (UserStatus.expired, UserStatus.disabled):
         dbuser.status = UserStatus.active.value
 
     if dbuser.next_plan:
@@ -1174,7 +1174,8 @@ def create_admin(db: Session, admin: AdminCreate) -> Admin:
         telegram_id=admin.telegram_id if admin.telegram_id else None,
         discord_webhook=admin.discord_webhook if admin.discord_webhook else None,
         traffic_limit=admin.traffic_limit if admin.traffic_limit is not None else None,
-        users_limit=admin.users_limit if admin.users_limit is not None else None
+        users_limit=admin.users_limit if admin.users_limit is not None else None,
+        subscription_url_prefix=admin.subscription_url_prefix if admin.subscription_url_prefix else None
     )
     db.add(dbadmin)
     db.commit()
@@ -1207,6 +1208,8 @@ def update_admin(db: Session, dbadmin: Admin, modified_admin: AdminModify) -> Ad
         dbadmin.traffic_limit = modified_admin.traffic_limit
     if modified_admin.users_limit is not None:
         dbadmin.users_limit = modified_admin.users_limit
+    if modified_admin.subscription_url_prefix is not None:
+        dbadmin.subscription_url_prefix = modified_admin.subscription_url_prefix or None
 
     db.commit()
     db.refresh(dbadmin)
@@ -1238,6 +1241,8 @@ def partial_update_admin(db: Session, dbadmin: Admin, modified_admin: AdminParti
         dbadmin.traffic_limit = modified_admin.traffic_limit
     if modified_admin.users_limit is not None:
         dbadmin.users_limit = modified_admin.users_limit
+    if modified_admin.subscription_url_prefix is not None:
+        dbadmin.subscription_url_prefix = modified_admin.subscription_url_prefix or None
 
     db.commit()
     db.refresh(dbadmin)

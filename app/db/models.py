@@ -51,6 +51,7 @@ class Admin(Base):
     users_usage = Column(BigInteger, nullable=False, default=0)
     traffic_limit = Column(BigInteger, nullable=True, default=None)
     users_limit = Column(Integer, nullable=True, default=None)
+    subscription_url_prefix = Column(String(512), nullable=True, default=None)
     usage_logs = relationship("AdminUsageLogs", back_populates="admin")
 
 

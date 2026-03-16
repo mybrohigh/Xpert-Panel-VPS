@@ -463,6 +463,8 @@ def user_subscription_with_client_type(
     _enforce_v2box_id_policy(user, request, user_agent)
     _enforce_device_limit(user, request, user_agent)
     _enforce_unique_ip_limit(user, request, user_agent)
+    
+    v2box_device_id = _get_v2box_device_id_for_response(user, user_agent)
 
     # Track subscription fetch for explicit client_type endpoints too (/sub/<token>/v2ray).
     crud.update_user_sub(db, dbuser, user_agent)

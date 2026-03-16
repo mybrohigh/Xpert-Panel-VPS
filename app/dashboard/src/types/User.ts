@@ -71,6 +71,7 @@ export type UserCreate = Pick<
 export type UserApi = {
   discord_webook: string;
   is_sudo: boolean;
+  is_primary_sudo: boolean;
   telegram_id: number | string;
   username: string;
 }

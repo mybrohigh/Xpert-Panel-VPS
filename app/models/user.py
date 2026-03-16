@@ -311,7 +311,11 @@ class UserResponse(User):
     def validate_subscription_url(self):
         if not self.subscription_url:
             salt = secrets.token_hex(8)
-            url_prefix = (XRAY_SUBSCRIPTION_URL_PREFIX).replace('*', salt)
+            # Per-admin subscription URL prefix (falls back to global)
+            admin_prefix = None
+            if self.admin and hasattr(self.admin, 'subscription_url_prefix'):
+                admin_prefix = self.admin.subscription_url_prefix
+            url_prefix = (admin_prefix or XRAY_SUBSCRIPTION_URL_PREFIX).replace('*', salt).strip("/")
             token = create_subscription_token(self.username)
             self.subscription_url = f"{url_prefix}/{XRAY_SUBSCRIPTION_PATH}/{token}"
         # Force v2ray format for all subscriptions
